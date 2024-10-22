@@ -10,7 +10,7 @@ import sys
 print(f"Qiskit version: {qiskit.__version__}")
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-api_key_path = os.path.join(current_dir, '..', 'apiKey.txt')
+api_key_path = os.path.join(current_dir, 'apiKey.txt')
 
 if os.path.exists(api_key_path):
     with open(api_key_path, 'r') as file:
@@ -18,6 +18,7 @@ if os.path.exists(api_key_path):
 else:
     api_key = os.getenv('API_KEY')
     if api_key is None:
+        print(f"Checked path: {api_key_path}")
         raise ValueError("API key not found in file or environment variable.")
 
 
@@ -40,7 +41,7 @@ def capture_output(func, *args, **kwargs):
     return captured_output.getvalue()        # Get the captured output.
 
 # Capture and save the output of superdense_coding
-superdense_output = capture_output(error_correction.run_quantum_circuit, [0, 0], backend)
+superdense_output = capture_output(error_correction.run_quantum_circuit, backend)
 print(superdense_output)
 with open(os.path.join(current_dir, 'superdense_output.txt'), 'w') as file:
     file.write(superdense_output)

@@ -1,7 +1,7 @@
 import qiskit
 from qiskit import *
 
-def run_quantum_circuit(input, backend):
+def run_quantum_circuit(backend):
     # Create a quantum circuit with 3 qubits and 3 classical bits
     qc = QuantumCircuit(3, 3)
     
@@ -17,7 +17,7 @@ def run_quantum_circuit(input, backend):
     qc.cx(0, 2)
     qc.ccx(1, 2, 0)
     
-    # Measure the qubits
+    print(qc.draw())
     qc.measure([0, 1, 2], [0, 1, 2])
     
     # Execute the circuit on the given backend
@@ -27,5 +27,6 @@ def run_quantum_circuit(input, backend):
     
     # Get the counts of the results
     counts = result.get_counts(qc)
+    print(counts)
     
     return counts

@@ -1,2 +1,4 @@
 *env
 apiKey.txt
+*__pycache__*
+Images
