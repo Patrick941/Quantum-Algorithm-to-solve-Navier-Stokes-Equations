@@ -2,3 +2,5 @@
 apiKey.txt
 *__pycache__*
 Images
+linear_pde_solver/__pycache__
+non_linear_pde_solver/__pycache__
