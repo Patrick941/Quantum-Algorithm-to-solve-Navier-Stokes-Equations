@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 def simulate_fluid_flow(grid_size, time_steps, viscosity, density):
-    u = np.ones((grid_size, grid_size))  # Initial condition: uniform flow from left to right
-    v = np.zeros((grid_size, grid_size))
+    u = np.ones((grid_size, grid_size)) / np.sqrt(2)  # Initial condition: uniform flow from bottom left to top right
+    v = np.ones((grid_size, grid_size)) / np.sqrt(2)
     
     u_list = [u.copy()]
     v_list = [v.copy()]
@@ -23,10 +23,9 @@ def simulate_fluid_flow(grid_size, time_steps, viscosity, density):
     
     return u_list, v_list
 
-def update_quiver(num, Q, u_list, v_list, obstacle_img):
+def update_quiver(num, Q, u_list, v_list):
     Q.set_UVC(u_list[num], v_list[num])
-    obstacle_img.set_data(obstacle)
-    return Q, obstacle_img
+    return Q,
 
 grid_size = 50
 time_steps = 100
@@ -44,8 +43,8 @@ def apply_obstacle(u, v, obstacle):
 
 # Modify the simulation to include the obstacle
 def simulate_fluid_flow_with_obstacle(grid_size, time_steps, viscosity, density, obstacle):
-    u = np.ones((grid_size, grid_size))  # Initial condition: uniform flow from left to right
-    v = np.zeros((grid_size, grid_size))
+    u = np.ones((grid_size, grid_size)) / np.sqrt(2)  # Initial condition: uniform flow from bottom left to top right
+    v = np.ones((grid_size, grid_size)) / np.sqrt(2)
     
     u_list = [u.copy()]
     v_list = [v.copy()]
@@ -68,15 +67,22 @@ def simulate_fluid_flow_with_obstacle(grid_size, time_steps, viscosity, density,
 
 u_list, v_list = simulate_fluid_flow_with_obstacle(grid_size, time_steps, viscosity, density, obstacle)
 
+scale=20
+
 fig, ax = plt.subplots()
 x = np.linspace(0, 1, grid_size)
 y = np.linspace(0, 1, grid_size)
 X, Y = np.meshgrid(x, y)
-Q = ax.quiver(X, Y, u_list[0], v_list[0])
+Q = ax.quiver(X, Y, u_list[0], v_list[0], scale=scale, scale_units='xy')
 
-# Display the obstacle
-obstacle_img = ax.imshow(obstacle, extent=[0, 1, 0, 1], origin='lower', cmap='gray', alpha=0.5)
-
-ani = animation.FuncAnimation(fig, update_quiver, fargs=(Q, u_list, v_list, obstacle_img), frames=range(time_steps), interval=50, blit=False)
+ani = animation.FuncAnimation(fig, update_quiver, fargs=(Q, u_list, v_list), frames=range(time_steps), interval=50, blit=False)
 plt.title("Simulated Fluid Flow with Obstacle")
 plt.show()
+
+# Save the final frame as an image
+final_frame = time_steps - 1
+fig, ax = plt.subplots()
+Q = ax.quiver(X, Y, u_list[final_frame], v_list[final_frame], scale=scale, scale_units='xy')
+plt.title("Final Frame of Simulated Fluid Flow with Obstacle")
+plt.savefig('../Images/final_frame.png')
+plt.close(fig)

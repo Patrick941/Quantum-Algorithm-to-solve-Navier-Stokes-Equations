@@ -45,8 +45,17 @@ $$
 The first equation is the continuity equation, which states that the divergence of the velocity field is zero.\
 The second equation is the momentum equation, which states that the rate of change of momentum is equal to the sum of the pressure gradient, viscous forces and external forces.
 
-The problem that I hope to solve in this project is to develop a quantum algorithm that can solve the Navier-Stokes equations. A common use case for the Navier-Stokes equations is to model air flow around an aircraft. The quantum algorithm developed in this paper will be used to solve the Navier-Stokes and simulate the air flow around an object. The simulation will be very simple and will only consider a 2D flow around some object. The same simulation will be run on a classical computer to have a visual comparison of the results in addition to the numerical comparison. 
-\
+The problem that I hope to solve in this project is to develop a quantum algorithm that can solve the Navier-Stokes equations. A common use case for the Navier-Stokes equations is to model air flow around an aircraft. The quantum algorithm developed in this paper will be used to solve the Navier-Stokes and simulate the air flow around an object. The simulation will be very simple and will only consider a 2D flow around some object. The same simulation will be run on a classical computer to have a visual comparison of the results in addition to the numerical comparison. An image of the simulation for a classical computer is shown below:\
+
+```{=latex}
+\begin{center}
+```
+
+![](Images/final_frame.png){width=60%}
+
+```{=latex}
+\end{center}
+```
 
 # Objectives
 
