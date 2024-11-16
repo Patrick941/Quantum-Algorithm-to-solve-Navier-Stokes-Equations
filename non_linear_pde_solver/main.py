@@ -1,152 +1,82 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import numpy as np
-from tqdm import tqdm
 
-N_POINTS = 41
-DOMAIN_SIZE = 1.0
-N_ITERATIONS = 5000000
-TIME_STEP_LENGTH = 0.001
-KINEMATIC_VISCOSITY = 0.01
-DENSITY = 0.1
-HORIZONTAL_VELOCITY_TOP = 1.0
-
-N_PRESSURE_POISSON_ITERATIONS = 50
-STABILITY_SAFETY_FACTOR = 0.5
-
-def main():
-    element_length = DOMAIN_SIZE / (N_POINTS - 1)
-    x = np.linspace(0.0, DOMAIN_SIZE, N_POINTS)
-    y = np.linspace(0.0, DOMAIN_SIZE, N_POINTS)
-
-    X, Y = np.meshgrid(x, y)
-
-    u_prev = np.zeros_like(X)
-    v_prev = np.zeros_like(X)
-    p_prev = np.zeros_like(X)
-
-    def central_difference_x(f):
-        diff = np.zeros_like(f)
-        diff[1:-1, 1:-1] = (
-            f[1:-1, 2:] - f[1:-1, :-2]
-        ) / (2 * element_length)
-        return diff
+def simulate_fluid_flow(grid_size, time_steps, viscosity, density):
+    u = np.ones((grid_size, grid_size))  # Initial condition: uniform flow from left to right
+    v = np.zeros((grid_size, grid_size))
     
-    def central_difference_y(f):
-        diff = np.zeros_like(f)
-        diff[1:-1, 1:-1] = (
-            f[2:, 1:-1] - f[:-2, 1:-1]
-        ) / (2 * element_length)
-        return diff
+    u_list = [u.copy()]
+    v_list = [v.copy()]
     
-    def laplace(f):
-        diff = np.zeros_like(f)
-        diff[1:-1, 1:-1] = (
-            f[1:-1, :-2] + f[:-2, 1:-1] - 4 * f[1:-1, 1:-1] + f[1:-1, 2:] + f[2:, 1:-1]
-        ) / (element_length**2)
-        return diff
+    for _ in range(time_steps):
+        laplacian_u = np.roll(u, 1, axis=0) + np.roll(u, -1, axis=0) + \
+                      np.roll(u, 1, axis=1) + np.roll(u, -1, axis=1) - 4 * u
+        laplacian_v = np.roll(v, 1, axis=0) + np.roll(v, -1, axis=0) + \
+                      np.roll(v, 1, axis=1) + np.roll(v, -1, axis=1) - 4 * v
+        
+        u += viscosity * laplacian_u / density
+        v += viscosity * laplacian_v / density
+        
+        u_list.append(u.copy())
+        v_list.append(v.copy())
+    
+    return u_list, v_list
 
-    maximum_possible_time_step_length = (
-        0.5 * element_length**2 / KINEMATIC_VISCOSITY
-    )
-    if TIME_STEP_LENGTH > STABILITY_SAFETY_FACTOR * maximum_possible_time_step_length:
-        raise RuntimeError("Stability is not guaranteed")
+def update_quiver(num, Q, u_list, v_list, obstacle_img):
+    Q.set_UVC(u_list[num], v_list[num])
+    obstacle_img.set_data(obstacle)
+    return Q, obstacle_img
 
-    fig, ax = plt.subplots()
-    plt.style.use("dark_background")
-    contour = ax.contourf(X[::2, ::2], Y[::2, ::2], p_prev[::2, ::2], cmap="coolwarm")
-    quiver = ax.quiver(X[::2, ::2], Y[::2, ::2], u_prev[::2, ::2], v_prev[::2, ::2], color="black")
-    cbar = plt.colorbar(contour)
-    plt.xlim((0, 1))
-    plt.ylim((0, 1))
+grid_size = 50
+time_steps = 100
+viscosity = 0.1
+density = 1.0
 
-    def update(frame):
-        nonlocal u_prev, v_prev, p_prev
+# Adding a simple object as an obstacle
+obstacle = np.zeros((grid_size, grid_size))
+obstacle[20:30, 20:30] = 1  # Creating a square obstacle in the middle of the grid
 
-        d_u_prev__d_x = central_difference_x(u_prev)
-        d_u_prev__d_y = central_difference_y(u_prev)
-        d_v_prev__d_x = central_difference_x(v_prev)
-        d_v_prev__d_y = central_difference_y(v_prev)
-        laplace__u_prev = laplace(u_prev)
-        laplace__v_prev = laplace(v_prev)
+def apply_obstacle(u, v, obstacle):
+    u[obstacle == 1] = 0
+    v[obstacle == 1] = 0
+    return u, v
 
-        u_tent = (
-            u_prev
-            + TIME_STEP_LENGTH * (
-                - (u_prev * d_u_prev__d_x + v_prev * d_u_prev__d_y)
-                + KINEMATIC_VISCOSITY * laplace__u_prev
-            )
-        )
-        v_tent = (
-            v_prev
-            + TIME_STEP_LENGTH * (
-                - (u_prev * d_v_prev__d_x + v_prev * d_v_prev__d_y)
-                + KINEMATIC_VISCOSITY * laplace__v_prev
-            )
-        )
+# Modify the simulation to include the obstacle
+def simulate_fluid_flow_with_obstacle(grid_size, time_steps, viscosity, density, obstacle):
+    u = np.ones((grid_size, grid_size))  # Initial condition: uniform flow from left to right
+    v = np.zeros((grid_size, grid_size))
+    
+    u_list = [u.copy()]
+    v_list = [v.copy()]
+    
+    for _ in range(time_steps):
+        laplacian_u = np.roll(u, 1, axis=0) + np.roll(u, -1, axis=0) + \
+                      np.roll(u, 1, axis=1) + np.roll(u, -1, axis=1) - 4 * u
+        laplacian_v = np.roll(v, 1, axis=0) + np.roll(v, -1, axis=0) + \
+                      np.roll(v, 1, axis=1) + np.roll(v, -1, axis=1) - 4 * v
+        
+        u += viscosity * laplacian_u / density
+        v += viscosity * laplacian_v / density
+        
+        u, v = apply_obstacle(u, v, obstacle)
+        
+        u_list.append(u.copy())
+        v_list.append(v.copy())
+    
+    return u_list, v_list
 
-        u_tent[0, :] = 0.0
-        u_tent[:, 0] = 0.0
-        u_tent[:, -1] = 0.0
-        u_tent[-1, :] = HORIZONTAL_VELOCITY_TOP
-        v_tent[0, :] = 0.0
-        v_tent[:, 0] = 0.0
-        v_tent[:, -1] = 0.0
-        v_tent[-1, :] = 0.0
+u_list, v_list = simulate_fluid_flow_with_obstacle(grid_size, time_steps, viscosity, density, obstacle)
 
-        d_u_tent__d_x = central_difference_x(u_tent)
-        d_v_tent__d_y = central_difference_y(v_tent)
+fig, ax = plt.subplots()
+x = np.linspace(0, 1, grid_size)
+y = np.linspace(0, 1, grid_size)
+X, Y = np.meshgrid(x, y)
+Q = ax.quiver(X, Y, u_list[0], v_list[0])
 
-        rhs = (
-            DENSITY / TIME_STEP_LENGTH * (d_u_tent__d_x + d_v_tent__d_y)
-        )
+# Display the obstacle
+obstacle_img = ax.imshow(obstacle, extent=[0, 1, 0, 1], origin='lower', cmap='gray', alpha=0.5)
 
-        for _ in range(N_PRESSURE_POISSON_ITERATIONS):
-            p_next = np.zeros_like(p_prev)
-            p_next[1:-1, 1:-1] = 1/4 * (
-                p_prev[1:-1, :-2] + p_prev[:-2, 1:-1] + p_prev[1:-1, 2:] + p_prev[2:, 1:-1]
-                - element_length**2 * rhs[1:-1, 1:-1]
-            )
-
-            p_next[:, -1] = p_next[:, -2]
-            p_next[0, :] = p_next[1, :]
-            p_next[:, 0] = p_next[:, 1]
-            p_next[-1, :] = 0.0
-
-            p_prev = p_next
-
-        d_p_next__d_x = central_difference_x(p_next)
-        d_p_next__d_y = central_difference_y(p_next)
-
-        u_next = (
-            u_tent - TIME_STEP_LENGTH / DENSITY * d_p_next__d_x
-        )
-        v_next = (
-            v_tent - TIME_STEP_LENGTH / DENSITY * d_p_next__d_y
-        )
-
-        u_next[0, :] = 0.0
-        u_next[:, 0] = 0.0
-        u_next[:, -1] = 0.0
-        u_next[-1, :] = HORIZONTAL_VELOCITY_TOP
-        v_next[0, :] = 0.0
-        v_next[:, 0] = 0.0
-        v_next[:, -1] = 0.0
-        v_next[-1, :] = 0.0
-
-        u_prev = u_next
-        v_prev = v_next
-        p_prev = p_next
-
-        ax.clear()
-        contour = ax.contourf(X[::2, ::2], Y[::2, ::2], p_next[::2, ::2], cmap="coolwarm")
-        quiver = ax.quiver(X[::2, ::2], Y[::2, ::2], u_next[::2, ::2], v_next[::2, ::2], color="black")
-        cbar.update_normal(contour)
-        plt.xlim((0, 1))
-        plt.ylim((0, 1))
-
-    ani = animation.FuncAnimation(fig, update, frames=tqdm(range(N_ITERATIONS)), repeat=False)
-    plt.show()
-
-if __name__ == "__main__":
-    main()
+ani = animation.FuncAnimation(fig, update_quiver, fargs=(Q, u_list, v_list, obstacle_img), frames=range(time_steps), interval=50, blit=False)
+plt.title("Simulated Fluid Flow with Obstacle")
+plt.show()
