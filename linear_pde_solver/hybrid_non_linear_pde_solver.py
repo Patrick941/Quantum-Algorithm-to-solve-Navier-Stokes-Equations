@@ -9,11 +9,11 @@ class HybridNavierStokesSolver:
         self.x_range = x_range
         self.t_range = t_range
         self.nx = nx
-        self.nt = nt // scale_back  # Reduce the number of iterations by the scale_back factor
+        self.nt = nt // scale_back
         self.dx = (x_range[1] - x_range[0]) / nx
         self.dt = (t_range[1] - t_range[0]) / self.nt
-        self.u = np.zeros((self.nt + 1, nx + 1))  # Velocity field
-        self.p = np.zeros((self.nt + 1, nx + 1))  # Pressure field
+        self.u = np.zeros((self.nt + 1, nx + 1))
+        self.p = np.zeros((self.nt + 1, nx + 1))
         self.use_quantum_solver = use_quantum_solver
 
     def initial_conditions(self, u0):
@@ -32,7 +32,6 @@ class HybridNavierStokesSolver:
             return linear_pde_solver.LinearPDESolver
 
     def solve_diffusion(self):
-        # Solve the diffusion equation for velocity
         SolverClass = self.get_solver_class()
         diffusion_solver = SolverClass(
             a=self.nu, b=0, c=0, f=lambda x, t: 0,
@@ -45,7 +44,6 @@ class HybridNavierStokesSolver:
         self.u = diffusion_solver.get_solution()
 
     def solve_poisson(self):
-        # Solve the Poisson equation for pressure
         source_term = self.compute_source_term()
         SolverClass = self.get_solver_class()
         poisson_solver = SolverClass(
@@ -59,7 +57,6 @@ class HybridNavierStokesSolver:
         self.p = poisson_solver.get_solution()
 
     def compute_source_term(self):
-        # Compute the source term for the Poisson equation
         source_term = np.zeros((self.nt + 1, self.nx + 1))
         for n in range(self.nt):
             for i in range(1, self.nx):
