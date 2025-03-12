@@ -1,6 +1,6 @@
 import numpy as np
 from qiskit import QuantumCircuit, transpile
-from qiskit_aer import AerSimulator, Aer
+from qiskit_aer import AerSimulator
 
 class QuantumLinearPDESolver:
     def __init__(self, a, b, c, f, x_range, t_range, nx, nt):
@@ -14,8 +14,10 @@ class QuantumLinearPDESolver:
         self.nt = nt
         self.dx = (x_range[1] - x_range[0]) / nx
         self.dt = (t_range[1] - t_range[0]) / nt
-        self.u = np.zeros((nt+1, nx+1))
+        self.u = np.zeros((nt + 1, nx + 1))
         self.backend = AerSimulator()
+        self.max_amplitude = 0.2
+        self.measurement_scale = 0.1
 
     def initial_conditions(self, u0):
         self.u[0, :] = u0
@@ -25,35 +27,38 @@ class QuantumLinearPDESolver:
         self.u[:, -1] = right_bc
 
     def solve(self):
-        for n in range(0, self.nt):
+        for n in range(self.nt):
             for i in range(1, self.nx):
-                self.u[n+1, i] = self.run_quantum_circuit(n, i)
+                laplacian = (self.u[n, i + 1] - 2 * self.u[n, i] + self.u[n, i - 1]) / self.dx**2
+                gradient = (self.u[n, i + 1] - self.u[n, i - 1]) / (2 * self.dx)
+                x = self.x_range[0] + i * self.dx
+                t = self.t_range[0] + n * self.dt
+                quantum_term = self.quantum_update_step(laplacian, gradient, self.u[n, i], self.f(x, t))
+                self.u[n + 1, i] = self.u[n, i] + self.dt * (
+                    self.a * laplacian +
+                    self.b * gradient +
+                    self.c * self.u[n, i] +
+                    self.f(x, t)
+                ) + quantum_term
 
-    def run_quantum_circuit(self, n, i):
-        qc = QuantumCircuit(3, 3)
-        
-        # Encode the input state
-        qc.h(0)
-        qc.cx(0, 1)
-        qc.cx(0, 2)
-        
-        # Apply the PDE coefficients as quantum gates
-        qc.u(self.a * self.dt / self.dx**2, 0, 0, 0)
-        qc.u(self.b * self.dt / (2 * self.dx), 0, 0, 1)
-        qc.u(self.c * self.dt, 0, 0, 2)
-        
-        # Measure the qubits
-        qc.measure([0, 1, 2], [0, 1, 2])
-        
-        # Execute the circuit
-        qc_compiled = transpile(qc, backend=self.backend)
-        job = self.backend.run(qc_compiled) 
+    def quantum_update_step(self, laplacian, gradient, u_current, f_val):
+        qc = QuantumCircuit(3, 1)
+        theta = np.arctan(self.max_amplitude * (
+            self.a * laplacian +
+            self.b * gradient +
+            self.c * u_current +
+            f_val
+        ))
+        qc.ry(theta, 0)
+        qc.crx(np.pi / 2, 0, 1)
+        qc.crz(np.pi / 2, 0, 2)
+        qc.barrier()
+        qc.h([1, 2])
+        qc.measure([2], [0])
+        job = self.backend.run(qc, shots=20)
         result = job.result()
-        counts = result.get_counts(qc)
-        
-        # Decode the result
-        measured_value = max(counts, key=counts.get)
-        return int(measured_value, 2) * self.dt
+        counts = result.get_counts()
+        return self.measurement_scale * (counts.get('0', 0) - counts.get('1', 0)) / 100
 
     def get_solution(self):
         return self.u
