@@ -1,11 +1,12 @@
 import numpy as np
 
 class NonLinearPDESolver:
-    def __init__(self, nx, ny, nt, dt, rho, nu, x_range=(0, 2), y_range=(0, 2)):
-        self.nx = nx
-        self.ny = ny
-        self.nt = nt
-        self.dt = dt
+    def __init__(self, nx, ny, nt, dt, rho, nu, x_range=(0, 2), y_range=(0, 2), scale_back=1):
+        scale_back = scale_back
+        self.nx = nx // scale_back
+        self.ny = ny // scale_back
+        self.nt = nt // scale_back
+        self.dt = dt / scale_back
         self.rho = rho
         self.nu = nu
         self.x_range = x_range
