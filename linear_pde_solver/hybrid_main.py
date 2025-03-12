@@ -77,4 +77,4 @@ ax4.set_title('Classical Pressure Field')
 ax4.set_zlim(vmin_pressure, vmax_pressure)
 
 plt.tight_layout()
-plt.savefig('hybrid_navier_stokes_solution_comparison.png')
+plt.savefig('Images/hybrid_navier_stokes_solution_comparison.png')
