@@ -143,26 +143,24 @@ if __name__ == "__main__":
     # Get optimized parameters
     opt_params = result.x
     opt_params_reshaped = [opt_params[0:3], opt_params[3:6], opt_params[6:9]]
-    
+
     # Create solution state
     qr = QuantumRegister(3)
     circ = QuantumCircuit(qr)
     apply_fixed_ansatz([0, 1, 2], opt_params_reshaped, circ)
-    
+
     # Simulate final state
     backend = Aer.get_backend('statevector_simulator')
     t_circ = transpile(circ, backend)
     qobj = assemble(t_circ)
     job = backend.run(qobj)
     solution_state = job.result().get_statevector()
-    
+
     print("\nSolution state vector:")
     print(solution_state)
-    
-    # Replace the verification section with this corrected version:
 
     # Verification (example specific)
-    A = 0.55 * np.eye(8) + 0.45 * np.diag([1,1,1,1,-1,-1,-1,-1])
+    A = 0.55 * np.eye(8) + 0.45 * np.diag([1, 1, 1, 1, -1, -1, -1, -1])
     b = np.ones(8) / np.sqrt(8)
 
     # Convert Statevector to NumPy array
@@ -171,28 +169,26 @@ if __name__ == "__main__":
     # Calculate the solution
     solution = A @ solution_state_np
     solution /= np.linalg.norm(solution)
-    
-    print("Matrix A:")
+
+    # Calculate fidelity with target state
+    fidelity = np.abs(b.dot(solution.conj()))**2
+    print(f"\nFidelity with target state: {fidelity:.4f}")
+
+    # Print matrix A and vector b
+    print("\nMatrix A:")
     print(A)
     print("\nVector b:")
     print(b)
-
-    # Define matrix A
-    A = 0.55 * np.eye(8) + 0.45 * np.diag([1, 1, 1, 1, -1, -1, -1, -1])
-
-    # Define vector b
-    b = np.ones(8) / np.sqrt(8)
 
     # Solve the linear system classically
     x_classical = np.linalg.solve(A, b)
 
-    # Normalize the solution (to match quantum solution format)
+    # Normalize the classical solution
     x_classical /= np.linalg.norm(x_classical)
 
-    print("Classical solution:")
+    print("\nClassical solution:")
     print(x_classical)
-    
-    print("Matrix A:")
-    print(A)
-    print("\nVector b:")
-    print(b)
+
+    # Calculate fidelity for classical solution
+    fidelity_classical = np.abs(b.dot(x_classical.conj()))**2
+    print(f"\nFidelity with target state (classical): {fidelity_classical:.4f}")
