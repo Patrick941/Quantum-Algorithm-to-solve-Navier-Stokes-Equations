@@ -159,11 +159,19 @@ if __name__ == "__main__":
     print("\nSolution state vector:")
     print(solution_state)
     
+    # Replace the verification section with this corrected version:
+
     # Verification (example specific)
     A = 0.55 * np.eye(8) + 0.45 * np.diag([1,1,1,1,-1,-1,-1,-1])
     b = np.ones(8) / np.sqrt(8)
-    solution = A @ solution_state
+
+    # Convert Statevector to NumPy array
+    solution_state_np = np.array(solution_state)
+
+    # Calculate the solution
+    solution = A @ solution_state_np
     solution /= np.linalg.norm(solution)
-    
+
+    # Calculate fidelity
     fidelity = np.abs(b.dot(solution.conj()))**2
     print(f"\nFidelity with target state: {fidelity:.4f}")
