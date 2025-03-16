@@ -170,10 +170,6 @@ if __name__ == "__main__":
     solution = A @ solution_state_np
     solution /= np.linalg.norm(solution)
 
-    # Calculate fidelity with target state
-    fidelity = np.abs(b.dot(solution.conj()))**2
-    print(f"\nFidelity with target state: {fidelity:.4f}")
-
     # Print matrix A and vector b
     print("\nMatrix A:")
     print(A)
@@ -188,7 +184,3 @@ if __name__ == "__main__":
 
     print("\nClassical solution:")
     print(x_classical)
-
-    # Calculate fidelity for classical solution
-    fidelity_classical = np.abs(b.dot(x_classical.conj()))**2
-    print(f"\nFidelity with target state (classical): {fidelity_classical:.4f}")
