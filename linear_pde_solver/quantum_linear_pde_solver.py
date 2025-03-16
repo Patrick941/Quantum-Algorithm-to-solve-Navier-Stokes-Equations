@@ -175,3 +175,16 @@ if __name__ == "__main__":
     # Calculate fidelity
     fidelity = np.abs(b.dot(solution.conj()))**2
     print(f"\nFidelity with target state: {fidelity:.4f}")
+
+    # Solve the linear system classically
+    x_classical = np.linalg.solve(A, b)
+
+    # Normalize the solution (to match quantum solution format)
+    x_classical /= np.linalg.norm(x_classical)
+
+    print("Classical solution:")
+    print(x_classical)
+
+    # Verify fidelity with target state
+    fidelity_classical = np.abs(b.dot(x_classical.conj()))**2
+    print(f"\nFidelity with target state (classical): {fidelity_classical:.4f}")
