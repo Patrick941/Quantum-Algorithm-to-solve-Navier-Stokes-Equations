@@ -175,6 +175,11 @@ if __name__ == "__main__":
     # Calculate fidelity
     fidelity = np.abs(b.dot(solution.conj()))**2
     print(f"\nFidelity with target state: {fidelity:.4f}")
+    
+    print("Matrix A:")
+    print(A)
+    print("\nVector b:")
+    print(b)
 
     # Define matrix A
     A = 0.55 * np.eye(8) + 0.45 * np.diag([1, 1, 1, 1, -1, -1, -1, -1])
