@@ -1,5 +1,5 @@
 import qiskit
-from qiskit import Quantumqcuit, QuantumRegister, ClassicalRegister
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit import Aer, transpile, assemble
 import numpy as np
 from scipy.optimize import minimize
@@ -7,7 +7,7 @@ import random
 
 # 1. Define quantum subroutines
 def apply_fixed_ansatz(qubits, parameters):
-    """Parameterized quantum qcuit ansatz"""
+    """Parameterized quantum circuit ansatz"""
     for iz in range(len(qubits)):
         qc.ry(parameters[0][iz], qubits[iz])
     
@@ -61,16 +61,16 @@ def calculate_cost_function(parameters):
     for i in range(len(gate_set)):
         for j in range(len(gate_set)):
             qctl = QuantumRegister(5)
-            qc = Quantumqcuit(qctl)
+            qc = QuantumCircuit(qctl)
             
             multiply = coefficient_set[i] * coefficient_set[j]
             had_test([gate_set[i], gate_set[j]], [1, 2, 3], 0, parameters)
             
-            # Simulate quantum qcuit
+            # Simulate quantum circuit
             backend = Aer.get_backend('aer_simulator')
             qc.save_statevector()
-            t_qc = transpile(qc, backend)
-            qobj = assemble(t_qc)
+            t_circ = transpile(qc, backend)
+            qobj = assemble(t_circ)
             job = backend.run(qobj)
             result = job.result()
             
@@ -88,7 +88,7 @@ def calculate_cost_function(parameters):
             
             for extra in [0, 1]:
                 qctl = QuantumRegister(5)
-                qc = Quantumqcuit(qctl)
+                qc = QuantumCircuit(qctl)
                 
                 if extra == 0:
                     # Control-A operator
@@ -101,11 +101,11 @@ def calculate_cost_function(parameters):
                         if gate_set[j][ty] == 1:
                             qc.cz(0, ty+1)
                 
-                # Simulate qcuit
+                # Simulate circuit
                 backend = Aer.get_backend('aer_simulator')
                 qc.save_statevector()
-                t_qc = transpile(qc, backend)
-                qobj = assemble(t_qc)
+                t_circ = transpile(qc, backend)
+                qobj = assemble(t_circ)
                 job = backend.run(qobj)
                 result = job.result()
                 
@@ -135,7 +135,7 @@ print(result)
 optimal_params = [result.x[0:3], result.x[3:6], result.x[6:9]]
 
 # Get optimal statevector
-qc = Quantumqcuit(3)
+qc = QuantumCircuit(3)
 apply_fixed_ansatz([0, 1, 2], optimal_params)
 qc.save_statevector()
 
