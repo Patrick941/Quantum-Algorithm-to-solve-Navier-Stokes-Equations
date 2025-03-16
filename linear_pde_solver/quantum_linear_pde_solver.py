@@ -1,89 +1,79 @@
-from linear_pde_solver import LinearPDESolver
-import numpy as np
-from qiskit import QuantumCircuit
+from qiskit import QuantumCircuit, Aer, execute
 from qiskit.circuit import Parameter
-from qiskit_aer import AerSimulator
-from scipy.optimize import minimize
+from qiskit.opflow import PauliSumOp, StateFn
+import numpy as np
 
 class QuantumLinearPDESolver:
     def __init__(self, N, max_iter=100):
-        self.N = N                    # Number of grid points
-        self.max_iter = max_iter      # Optimization steps
+        self.N = N  # Grid points
+        self.max_iter = max_iter  # Optimization steps
         self.A, self.b = self.discretize()  # Discretized system
 
     def discretize(self):
-        # Discretization using a simple finite difference scheme
+        # Same as classical solver
         A = 2 * np.eye(self.N) - np.eye(self.N, k=1) - np.eye(self.N, k=-1)
         b = np.ones(self.N)
         return A, b
 
     def construct_ansatz(self):
-        # Two-qubit parameterized ansatz for N=2
-        theta1 = Parameter('θ1')
-        theta2 = Parameter('θ2')
-        qc = QuantumCircuit(2)
-        qc.ry(theta1, 0)  # Rotation on qubit 0
-        qc.ry(theta2, 1)  # Rotation on qubit 1
-        qc.cx(0, 1)       # Entanglement between qubits
-        qc.save_statevector()
+        # Single-qubit parameterized ansatz for simplicity (scalable to N=2)
+        theta = Parameter('θ')
+        qc = QuantumCircuit(1)
+        qc.ry(theta, 0)
         return qc
 
     def encode_b(self):
-        # Encode |b> as |+>|+> state (H|0> H|0>)
-        qc = QuantumCircuit(2)
-        qc.h(0)  # Apply Hadamard gate to qubit 0
-        qc.h(1)  # Apply Hadamard gate to qubit 1
-        qc.save_statevector()
+        # Encode |b> as a quantum state (H|0> for N=2)
+        qc = QuantumCircuit(1)
+        qc.h(0)
         return qc
 
-    def cost_function(self, theta_values):
-        sim = AerSimulator(method="statevector")
-        
-        # Construct the ansatz and bind parameters
+    def cost_function(self, theta_value):
+        # Compute cost: ||A|x(θ)> - |b>||^2
+        backend = Aer.get_backend('statevector_simulator')
+
+        # 1. Compute |x(θ)>
         ansatz = self.construct_ansatz()
-        param_dict = {param: theta_values[i] for i, param in enumerate(ansatz.parameters)}
-        ansatz.assign_parameters(param_dict, inplace=True)
-        
-        # Compute |x(θ)>
-        job_x = sim.run(ansatz)
-        x_state = np.asarray(job_x.result().get_statevector(ansatz))
-        
-        # Compute A|x(θ)>
+        ansatz.assign_parameters({ansatz.parameters[0]: theta_value}, inplace=True)
+        job = execute(ansatz, backend)
+        x_state = job.result().get_statevector()
+
+        # 2. Compute A|x(θ)> (classically for simplicity)
         Ax = self.A @ x_state
 
-        # Compute |b>
+        # 3. Compute |b>
         b_circuit = self.encode_b()
-        job_b = sim.run(b_circuit)
-        b_state = np.asarray(job_b.result().get_statevector(b_circuit))
+        job = execute(b_circuit, backend)
+        b_state = job.result().get_statevector()
 
-        # Compute the squared norm ||Ax - b||^2
+        # 4. Compute ||Ax - b||^2
         cost = np.linalg.norm(Ax - b_state) ** 2
         return cost
 
     def solve(self):
-        # Initial guess for parameters
-        initial_theta = np.array([0.1, 0.1])  # Two parameters for the two-qubit ansatz
-        
-        # Optimize using a classical optimizer
-        result = minimize(self.cost_function, initial_theta, method='COBYLA')
-        
-        # Get the optimized parameters
-        optimized_theta = result.x
-        
-        # Get final solution |x(θ)> using the optimized theta
-        ansatz = self.construct_ansatz()
-        param_dict = {param: optimized_theta[i] for i, param in enumerate(ansatz.parameters)}
-        ansatz.assign_parameters(param_dict, inplace=True)
-        sim = AerSimulator(method="statevector")
-        job_final = sim.run(ansatz)
-        x_quantum = np.asarray(job_final.result().get_statevector(ansatz))
-        return x_quantum
+        # Optimize using gradient descent (simplified)
+        theta = 0.1  # Initial guess
+        learning_rate = 0.1
+        for _ in range(self.max_iter):
+            cost = self.cost_function(theta)
+            gradient = (self.cost_function(theta + 0.01) - cost) / 0.01  # Finite difference
+            theta -= learning_rate * gradient
+            if cost < 1e-4:  # Convergence threshold
+                break
 
-if __name__ == "__main__":
-    classical_solver = LinearPDESolver(N=2)
-    x_classical = classical_solver.solve()
-    print("Classical solution:", x_classical)
+        # Get final solution |x(θ)>
+        ansatz = self.construct_ansatz()
+        ansatz.assign_parameters({ansatz.parameters[0]: theta}, inplace=True)
+        job = execute(ansatz, Aer.get_backend('statevector_simulator'))
+        x_quantum = np.real(job.result().get_statevector())
+        return x_quantum
     
-    quantum_solver = QuantumLinearPDESolver(N=4)
+    
+if __name__ == "__main__":
+    quantum_solver = QuantumLinearPDESolver(N=2)
+
+    x_classical = classical_solver.solve()
     x_quantum = quantum_solver.solve()
+
+    print("Classical solution:", x_classical)
     print("Quantum solution:", x_quantum)
