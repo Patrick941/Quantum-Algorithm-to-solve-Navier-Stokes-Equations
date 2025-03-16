@@ -1,172 +1,187 @@
 import qiskit
-from qiskit import QuantumCircuit, QuantumRegister
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit import Aer, transpile, assemble
 import numpy as np
-from scipy.optimize import minimize
 import random
+from scipy.optimize import minimize
 
-# Numerical stability parameters
-EPSILON = 1e-8
-MAX_COST = 1e3
-
-def apply_fixed_ansatz(circ, qubits, parameters):
-    """Parameterized quantum circuit ansatz with input validation"""
-    assert len(parameters) == 3, "Parameters need 3 layers"
-    assert all(len(layer) == 3 for layer in parameters), "3 parameters per layer needed"
+# 1. Ansatz Definition
+def apply_fixed_ansatz(qubits, parameters):
+    circ = QuantumCircuit(3)
+    for iz in range(3):
+        circ.ry(parameters[0][iz], qubits[iz])
     
-    for layer in parameters:
-        for q, angle in zip(qubits, layer):
-            circ.ry(angle, q)
-        
-        circ.cz(qubits[0], qubits[1])
-        circ.cz(qubits[2], qubits[0])
+    circ.cz(qubits[0], qubits[1])
+    circ.cz(qubits[2], qubits[0])
+    
+    for iz in range(3):
+        circ.ry(parameters[1][iz], qubits[iz])
+    
+    circ.cz(qubits[1], qubits[2])
+    circ.cz(qubits[2], qubits[0])
+    
+    for iz in range(3):
+        circ.ry(parameters[2][iz], qubits[iz])
+    return circ
 
-def had_test(circ, gate_type, qubits, auxiliary_index, parameters):
-    """Stabilized Hadamard test implementation"""
+# 2. Hadamard Test Implementation
+def had_test(gate_type, qubits, auxiliary_index, parameters):
+    circ = QuantumCircuit(4)
     circ.h(auxiliary_index)
-    apply_fixed_ansatz(circ, qubits, parameters)
     
-    # Apply controlled operations with validation
-    for part in gate_type:
-        if sum(part) == 0:  # Identity operation
-            circ.id(auxiliary_index)
-        else:
-            for q, active in enumerate(part):
-                if active:
-                    circ.cz(auxiliary_index, qubits[q])
+    ansatz_circ = apply_fixed_ansatz(qubits, parameters)
+    circ.compose(ansatz_circ, qubits, inplace=True)
+    
+    # Apply controlled unitaries
+    for ie in range(len(gate_type)):
+        if gate_type[ie] == 1:
+            circ.cz(auxiliary_index, qubits[ie])
     
     circ.h(auxiliary_index)
+    return circ
 
-# Stabilized problem parameters
-coefficient_set = [2.0, -1.0, -1.0]  # A = 2I - XXI - IXX
+# 3. Controlled Operations
+def control_fixed_ansatz(qubits, parameters, auxiliary, reg):
+    circ = QuantumCircuit(reg)
+    for i in range(len(qubits)):
+        circ.cry(parameters[0][i], auxiliary, qubits[i])
+    
+    circ.ccx(auxiliary, qubits[1], 4)
+    circ.cz(qubits[0], 4)
+    circ.ccx(auxiliary, qubits[1], 4)
+    
+    circ.ccx(auxiliary, qubits[0], 4)
+    circ.cz(qubits[2], 4)
+    circ.ccx(auxiliary, qubits[0], 4)
+    
+    for i in range(len(qubits)):
+        circ.cry(parameters[1][i], auxiliary, qubits[i])
+    
+    circ.ccx(auxiliary, qubits[2], 4)
+    circ.cz(qubits[1], 4)
+    circ.ccx(auxiliary, qubits[2], 4)
+    
+    circ.ccx(auxiliary, qubits[0], 4)
+    circ.cz(qubits[2], 4)
+    circ.ccx(auxiliary, qubits[0], 4)
+    
+    for i in range(len(qubits)):
+        circ.cry(parameters[2][i], auxiliary, qubits[i])
+    return circ
+
+def control_b(auxiliary, qubits):
+    circ = QuantumCircuit(4)
+    for ia in qubits:
+        circ.ch(auxiliary, ia)
+    return circ
+
+def special_had_test(gate_type, qubits, auxiliary_index, parameters, reg):
+    circ = QuantumCircuit(reg)
+    circ.h(auxiliary_index)
+    
+    controlled_ansatz = control_fixed_ansatz(qubits, parameters, auxiliary_index, reg)
+    circ.compose(controlled_ansatz, inplace=True)
+    
+    for ty in range(len(gate_type)):
+        if gate_type[ty] == 1:
+            circ.cz(auxiliary_index, qubits[ty])
+    
+    controlled_b = control_b(auxiliary_index, qubits)
+    circ.compose(controlled_b, inplace=True)
+    
+    circ.h(auxiliary_index)
+    return circ
+
+# 4. Cost Function Calculation
+def calculate_cost_function(parameters):
+    overall_sum_1 = 0
+    parameters = [parameters[0:3], parameters[3:6], parameters[6:9]]
+    
+    backend = Aer.get_backend('aer_simulator')
+    
+    # Calculate Tr(X) where X = ⟨ψ|A†A|ψ⟩
+    for i in range(len(gate_set)):
+        for j in range(len(gate_set)):
+            circ = had_test(gate_set[i], [1,2,3], 0, parameters)
+            circ.save_statevector()
+            
+            t_circ = transpile(circ, backend)
+            qobj = assemble(t_circ)
+            job = backend.run(qobj)
+            
+            result = job.result()
+            o = np.real(result.get_statevector(circ, decimals=100))
+            
+            m_sum = sum(o[l]**2 for l in range(1, len(o), 2))
+            overall_sum_1 += coefficient_set[i] * coefficient_set[j] * (1 - 2*m_sum)
+
+    # Calculate Tr(Y) where Y = ⟨ψ|A†|b⟩⟨b|A|ψ⟩
+    overall_sum_2 = 0
+    for i in range(len(gate_set)):
+        for j in range(len(gate_set)):
+            mult = 1
+            for extra in range(2):
+                q_reg = QuantumRegister(5)
+                if extra == 0:
+                    circ = special_had_test(gate_set[i], [1,2,3], 0, parameters, q_reg)
+                else:
+                    circ = special_had_test(gate_set[j], [1,2,3], 0, parameters, q_reg)
+                
+                circ.save_statevector()
+                t_circ = transpile(circ, backend)
+                qobj = assemble(t_circ)
+                job = backend.run(qobj)
+                
+                result = job.result()
+                o = np.real(result.get_statevector(circ, decimals=100))
+                
+                m_sum = sum(o[l]**2 for l in range(1, len(o), 2))
+                mult *= (1 - 2*m_sum)
+            
+            overall_sum_2 += coefficient_set[i] * coefficient_set[j] * mult
+
+    cost = 1 - float(overall_sum_2 / overall_sum_1)
+    print(f"Cost: {cost}")
+    return cost
+
+# 5. Stokes Flow Parameters
+coefficient_set = [2.0, -1.0, -1.0]
 gate_set = [
-    [[0,0,0], [0,0,0]],  # Identity
-    [[1,1,0], [0,0,0]],  # XX on first two qubits
-    [[0,0,0], [0,1,1]]   # XX on last two qubits
+    [0, 0, 0],  # Identity term (2I)
+    [1, 1, 0],   # X⊗X⊗I term (-1*off-diagonal)
+    [0, 1, 1]    # I⊗X⊗X term (-1*off-diagonal)
 ]
 
-# Regularized source term
-b = np.array([1, 1, 1, 0, 0, 0, 0, 0], dtype=np.float64)
-b_norm = np.linalg.norm(b)
-b = b / (b_norm + EPSILON if b_norm < EPSILON else b_norm)
+# 6. Run Optimization
+np.random.seed(0)
+initial_params = [random.uniform(0, 2*np.pi) for _ in range(9)]
 
-def calculate_cost_function(parameters):
-    """Numerically stabilized cost function"""
-    try:
-        # Parameter validation
-        parameters = np.array(parameters).astype(np.float64)
-        if np.any(np.isnan(parameters)):
-            return MAX_COST
-            
-        params_reshaped = [
-            parameters[0:3],
-            parameters[3:6],
-            parameters[6:9]
-        ]
-        
-        overall_sum_1 = EPSILON  # Initialize with epsilon
-        overall_sum_2 = 0.0
-        
-        # Compute Tr[A†Aψ]
-        for i in range(len(gate_set)):
-            for j in range(len(gate_set)):
-                qr = QuantumRegister(5)
-                circ = QuantumCircuit(qr)
-                
-                had_test(circ, gate_set[i], [1,2,3], 0, params_reshaped)
-                
-                # Stabilized simulation
-                backend = Aer.get_backend('aer_simulator')
-                circ.save_statevector()
-                result = backend.run(transpile(circ, backend)).result()
-                outputstate = np.real(result.get_statevector(circ))
-                
-                # Probability calculation with clipping
-                prob_1 = np.clip(np.sum(outputstate[1::2]**2), 0, 1)
-                term = coefficient_set[i] * coefficient_set[j] * (1 - 2*prob_1)
-                overall_sum_1 += abs(term)  # Use absolute value for stability
+result = minimize(calculate_cost_function,
+                 x0=initial_params,
+                 method="COBYLA",
+                 options={'maxiter': 100})
 
-        # Compute |<b|A|ψ>|^2 with regularization
-        for i in range(len(gate_set)):
-            for j in range(len(gate_set)):
-                product_term = coefficient_set[i] * coefficient_set[j]
-                if abs(product_term) < EPSILON:
-                    continue
-                
-                # Double Hadamard test
-                for extra in [0, 1]:
-                    qr = QuantumRegister(5)
-                    circ = QuantumCircuit(qr)
-                    
-                    if extra == 0:
-                        had_test(circ, gate_set[i], [1,2,3], 0, params_reshaped)
-                    else:
-                        had_test(circ, gate_set[j], [1,2,3], 0, params_reshaped)
-                    
-                    result = Aer.get_backend('aer_simulator').run(
-                        transpile(circ, Aer.get_backend('aer_simulator'))
-                    ).result()
-                    outputstate = np.real(result.get_statevector(circ))
-                    
-                    prob_1 = np.clip(np.sum(outputstate[1::2]**2), 0, 1)
-                    product_term *= (1 - 2*prob_1)
-                
-                overall_sum_2 += product_term
+# 7. Post-Processing
+optimal_params = [result.x[0:3], result.x[3:6], result.x[6:9]]
+circ = apply_fixed_ansatz([0, 1, 2], optimal_params)
+circ.save_statevector()
 
-        # Final stabilized calculation
-        denominator = overall_sum_1 if overall_sum_1 > EPSILON else EPSILON
-        cost = 1 - np.clip(overall_sum_2 / denominator, -1, 1)
-        return float(np.nan_to_num(cost, nan=MAX_COST))
-    
-    except Exception as e:
-        print(f"Error in cost calculation: {str(e)}")
-        return MAX_COST
+backend = Aer.get_backend('aer_simulator')
+t_circ = transpile(circ, backend)
+qobj = assemble(t_circ)
+job = backend.run(qobj)
 
-# Robust optimization setup
-np.random.seed(42)
-initial_params = np.random.uniform(0, 2*np.pi, 9)
+statevector = result.get_statevector(circ, decimals=10)
 
-result = minimize(
-    calculate_cost_function,
-    x0=initial_params,
-    method="SLSQP",
-    bounds=[(0, 2*np.pi)]*9,
-    options={'maxiter': 100, 'ftol': 1e-6}
-)
+# 8. Verify Solution
+A = np.array([[2, -1, 0], [-1, 2, -1], [0, -1, 2]])
+b = np.array([1, 1, 1])
 
-print("\nOptimization results:")
-print(f"Success: {result.success}")
-print(f"Message: {result.message}")
-print(f"Final cost: {result.fun:.4f}")
+# Convert statevector to classical solution
+solution = np.array([statevector[0], statevector[1], statevector[2]])
+normalized_solution = solution / np.linalg.norm(solution)
 
-# Post-processing with validation
-if result.success and not np.isnan(result.fun):
-    optimal_params = [
-        result.x[0:3],
-        result.x[3:6],
-        result.x[6:9]
-    ]
-    
-    # Quantum state reconstruction
-    qr = QuantumRegister(3)
-    circ = QuantumCircuit(qr)
-    apply_fixed_ansatz(circ, [0,1,2], optimal_params)
-    circ.save_statevector()
-    
-    optimal_state = Aer.get_backend('aer_simulator').run(
-        transpile(circ, Aer.get_backend('aer_simulator'))
-    ).result().get_statevector(circ)
-    
-    # Classical verification
-    I = np.eye(2)
-    X = np.array([[0,1],[1,0]])
-    A = 2.0 * np.kron(np.kron(I,I), I) \
-        -1.0 * np.kron(np.kron(X,X), I) \
-        -1.0 * np.kron(I, np.kron(X,X))
-    
-    solution = A @ optimal_state
-    solution /= np.linalg.norm(solution) + EPSILON
-    fidelity = np.abs(b @ solution)**2
-    print(f"\nSolution fidelity: {fidelity:.4f}")
-else:
-    print("Optimization failed - try adjusting initial parameters or increasing iterations")
+# Calculate residual
+residual = np.linalg.norm(A @ normalized_solution - b)
+print(f"\nFinal Residual: {residual}")
+print(f"Optimization Result:\n{result}")
