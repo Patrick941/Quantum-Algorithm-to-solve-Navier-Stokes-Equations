@@ -72,8 +72,6 @@ class QuantumLinearPDESolver:
 if __name__ == "__main__":
     quantum_solver = QuantumLinearPDESolver(N=2)
 
-    x_classical = classical_solver.solve()
     x_quantum = quantum_solver.solve()
 
-    print("Classical solution:", x_classical)
     print("Quantum solution:", x_quantum)
