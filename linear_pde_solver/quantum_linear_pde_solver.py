@@ -176,6 +176,12 @@ if __name__ == "__main__":
     fidelity = np.abs(b.dot(solution.conj()))**2
     print(f"\nFidelity with target state: {fidelity:.4f}")
 
+    # Define matrix A
+    A = 0.55 * np.eye(8) + 0.45 * np.diag([1, 1, 1, 1, -1, -1, -1, -1])
+
+    # Define vector b
+    b = np.ones(8) / np.sqrt(8)
+
     # Solve the linear system classically
     x_classical = np.linalg.solve(A, b)
 
