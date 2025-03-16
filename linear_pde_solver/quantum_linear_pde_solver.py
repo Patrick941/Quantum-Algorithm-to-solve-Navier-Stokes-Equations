@@ -1,8 +1,8 @@
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile
-from qiskit.circuit.library import LinearAmplitudeFunction
-from qiskit.utils import QuantumInstance
 from qiskit.algorithms import HHL
+from qiskit.quantum_info import Statevector
+from qiskit.utils import QuantumInstance
 
 # Step 1: Define the linear system (1D Poisson equation)
 A = np.array([[4, -1], [-1, 4]])  # Discretized Laplacian
@@ -14,21 +14,14 @@ print(f"Classical solution: {x_classical}")
 
 # Step 3: Quantum setup with updated matrix encoding
 # -----------------------------------------
-# (a) Encode the matrix using LinearAmplitudeFunction
+# (a) Encode the matrix manually (example for 2x2 matrix)
 def matrix_to_circuit(A):
     """Convert matrix to a quantum circuit"""
-    # Define the domain and image of the matrix
-    domain = (0, 1)  # Example domain (adjust based on your problem)
-    image = (0, 1)   # Example image (adjust based on your problem)
-    slope = 1.0      # Slope for linear encoding
-    offset = 0.0     # Offset for linear encoding
-    return LinearAmplitudeFunction(
-        slope=slope,
-        offset=offset,
-        domain=domain,
-        image=image,
-        function=lambda x: np.dot(A, x)  # Matrix multiplication
-    )
+    qc = QuantumCircuit(2)
+    # Example: Encode matrix A into a quantum circuit
+    # This is a placeholder and needs to be adjusted based on your specific problem
+    qc.unitary(A, [0, 1], label='A')
+    return qc
 
 # (b) Define the quantum solver (HHL is deprecated, but used here for demonstration)
 quantum_instance = QuantumInstance(Aer.get_backend('aer_simulator'))
@@ -43,7 +36,7 @@ result = hhl.solve(
 # Step 4: Post-process results
 # ----------------------------
 # Get the solution state
-solution_state = result.statevector
+solution_state = Statevector(result.statevector)
 
 # Create measurement circuit
 qc = QuantumCircuit(2)
