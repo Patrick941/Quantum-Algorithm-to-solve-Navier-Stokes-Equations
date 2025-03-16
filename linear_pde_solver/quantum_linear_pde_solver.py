@@ -194,3 +194,8 @@ if __name__ == "__main__":
     # Verify fidelity with target state
     fidelity_classical = np.abs(b.dot(x_classical.conj()))**2
     print(f"\nFidelity with target state (classical): {fidelity_classical:.4f}")
+    
+    print("Matrix A:")
+    print(A)
+    print("\nVector b:")
+    print(b)
