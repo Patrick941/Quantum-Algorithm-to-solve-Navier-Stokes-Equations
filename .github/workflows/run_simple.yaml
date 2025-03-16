@@ -1,14 +1,13 @@
 name: run_assignment_main
 
+
 on:
-  workflow_dispatch:
-    inputs:
-      assignment:
-        description: 'Assignment to run'
-        required: true
-      MODE:
-        description: 'Mode to run the assignment in'
-        required: true
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
 
 jobs:
   build:
