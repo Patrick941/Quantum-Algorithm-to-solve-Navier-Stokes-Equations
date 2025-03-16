@@ -9,34 +9,34 @@ import random
 def apply_fixed_ansatz(qubits, parameters):
     """Parameterized quantum circuit ansatz"""
     for iz in range(len(qubits)):
-        qc.ry(parameters[0][iz], qubits[iz])
+        circ.ry(parameters[0][iz], qubits[iz])
     
-    qc.cz(qubits[0], qubits[1])
-    qc.cz(qubits[2], qubits[0])
-    
-    for iz in range(len(qubits)):
-        qc.ry(parameters[1][iz], qubits[iz])
-    
-    qc.cz(qubits[1], qubits[2])
-    qc.cz(qubits[2], qubits[0])
+    circ.cz(qubits[0], qubits[1])
+    circ.cz(qubits[2], qubits[0])
     
     for iz in range(len(qubits)):
-        qc.ry(parameters[2][iz], qubits[iz])
+        circ.ry(parameters[1][iz], qubits[iz])
+    
+    circ.cz(qubits[1], qubits[2])
+    circ.cz(qubits[2], qubits[0])
+    
+    for iz in range(len(qubits)):
+        circ.ry(parameters[2][iz], qubits[iz])
 
 def had_test(gate_type, qubits, auxiliary_index, parameters):
     """Hadamard test for expectation values"""
-    qc.h(auxiliary_index)
+    circ.h(auxiliary_index)
     apply_fixed_ansatz(qubits, parameters)
     
     for ie in range(len(gate_type[0])):
         if gate_type[0][ie] == 1:
-            qc.cz(auxiliary_index, qubits[ie])
+            circ.cz(auxiliary_index, qubits[ie])
     
     for ie in range(len(gate_type[1])):
         if gate_type[1][ie] == 1:
-            qc.cz(auxiliary_index, qubits[ie])
+            circ.cz(auxiliary_index, qubits[ie])
     
-    qc.h(auxiliary_index)
+    circ.h(auxiliary_index)
 
 # 2. Define problem-specific parameters
 # Discretized Stokes equation coefficients
@@ -61,21 +61,21 @@ def calculate_cost_function(parameters):
     for i in range(len(gate_set)):
         for j in range(len(gate_set)):
             qctl = QuantumRegister(5)
-            qc = QuantumCircuit(qctl)
+            circ = QuantumCircuit(qctl)
             
             multiply = coefficient_set[i] * coefficient_set[j]
             had_test([gate_set[i], gate_set[j]], [1, 2, 3], 0, parameters)
             
             # Simulate quantum circuit
             backend = Aer.get_backend('aer_simulator')
-            qc.save_statevector()
-            t_circ = transpile(qc, backend)
+            circ.save_statevector()
+            t_circ = transpile(circ, backend)
             qobj = assemble(t_circ)
             job = backend.run(qobj)
             result = job.result()
             
             # Calculate probabilities
-            outputstate = np.real(result.get_statevector(qc, decimals=100))
+            outputstate = np.real(result.get_statevector(circ, decimals=100))
             m_sum = sum(outputstate[l]**2 for l in range(1, len(outputstate), 2))
             overall_sum_1 += multiply * (1 - 2*m_sum)
 
@@ -88,29 +88,29 @@ def calculate_cost_function(parameters):
             
             for extra in [0, 1]:
                 qctl = QuantumRegister(5)
-                qc = QuantumCircuit(qctl)
+                circ = QuantumCircuit(qctl)
                 
                 if extra == 0:
                     # Control-A operator
                     for ty in range(len(gate_set[i])):
                         if gate_set[i][ty] == 1:
-                            qc.cz(0, ty+1)
+                            circ.cz(0, ty+1)
                 else:
                     # Control-b preparation
                     for ty in range(len(gate_set[j])):
                         if gate_set[j][ty] == 1:
-                            qc.cz(0, ty+1)
+                            circ.cz(0, ty+1)
                 
                 # Simulate circuit
                 backend = Aer.get_backend('aer_simulator')
-                qc.save_statevector()
-                t_circ = transpile(qc, backend)
+                circ.save_statevector()
+                t_circ = transpile(circ, backend)
                 qobj = assemble(t_circ)
                 job = backend.run(qobj)
                 result = job.result()
                 
                 # Calculate probabilities
-                outputstate = np.real(result.get_statevector(qc, decimals=100))
+                outputstate = np.real(result.get_statevector(circ, decimals=100))
                 m_sum = sum(outputstate[l]**2 for l in range(1, len(outputstate), 2))
                 mult *= (1 - 2*m_sum)
             
