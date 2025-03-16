@@ -1,9 +1,9 @@
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile
-from qiskit.algorithms.linear_solvers import HHL
-from qiskit.quantum_info import SparsePauliOp
-from qiskit.utils import QuantumInstance
+from qiskit.algorithms import LinearSystemSolver
+from qiskit.quantum_info import Statevector
 from qiskit.circuit.library import LinearAmplitudeFunction
+from qiskit.utils import QuantumInstance
 
 # Step 1: Define the linear system (1D Poisson equation)
 A = np.array([[4, -1], [-1, 4]])  # Discretized Laplacian
@@ -15,30 +15,25 @@ print(f"Classical solution: {x_classical}")
 
 # Step 3: Quantum setup with updated classes
 # -----------------------------------------
-# (a) Encode the matrix using current methods
+# (a) Encode the matrix using LinearAmplitudeFunction
 def matrix_to_circuit(A):
-    """Convert matrix to a quantum circuit (for demonstration)"""
-    return LinearAmplitudeFunction(A, approximation_degree=1)
+    """Convert matrix to a quantum circuit"""
+    return LinearAmplitudeFunction(A)
 
-# (b) Define observable (now required to be Hermitian)
-observable = SparsePauliOp.from_list([("IZ", 1), ("ZI", 1)])  # Custom observable
-
-# (c) Configure HHL with current interface
-hhl = HHL()
+# (b) Define the quantum solver
 quantum_instance = QuantumInstance(Aer.get_backend('aer_simulator'))
+solver = LinearSystemSolver(quantum_instance=quantum_instance)
 
-# (d) Solve the system
-result = hhl.solve(
+# (c) Solve the system
+result = solver.solve(
     matrix=matrix_to_circuit(A),
-    vector=b,
-    observable=observable,
-    quantum_instance=quantum_instance
+    vector=b
 )
 
 # Step 4: Post-process results
 # ----------------------------
-# Get normalized solution state
-solution_state = result.state
+# Get the solution state
+solution_state = Statevector(result.statevector)
 
 # Create measurement circuit
 qc = QuantumCircuit(2)
