@@ -1,46 +1,41 @@
+# Install Qiskit (if not installed)
+# !pip install qiskit qiskit-aer
+
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile
 from qiskit.algorithms.linear_solvers import HHL
-from qiskit.opflow import PauliSumOp
-from qiskit.quantum_info import SparsePauliOp
-from qiskit.circuit.library import PauliEvolutionGate
+from qiskit.algorithms.linear_solvers.matrices import NumPyMatrix
+from qiskit.algorithms.linear_solvers.observables import MatrixFunctional
 
-# Step 1: Discretize PDE into Ax = b (1D Poisson example)
-N = 4  # Use a power of 2 (e.g., 4, 8, 16)
-h = 1.0 / (N + 1)  # Step size
+# Step 1: Define the linear system (e.g., 1D Poisson equation: A * x = b)
+A = np.array([[4, -1], [-1, 4]])  # Discretized Laplacian matrix (small example)
+b = np.array([1, 0])              # Source term/boundary conditions
 
-# Construct tridiagonal matrix A (Hermitian)
-diag = 2 / h**2 * np.ones(N)
-off_diag = -1 / h**2 * np.ones(N-1)
-A = np.diag(off_diag, -1) + np.diag(diag, 0) + np.diag(off_diag, 1)
+# Step 2: Solve classically (for comparison)
+x_classical = np.linalg.solve(A, b)
+print(f"Classical solution: {x_classical}")
 
-# Step 2: Encode A as a sparse Pauli operator
-pauli_terms = []
-for i in range(N):
-    for j in range(N):
-        if i == j:  # Diagonal terms (Z-based encoding)
-            pauli_str = 'I' * i + 'Z' + 'I' * (N - i - 1)
-            pauli_terms.append((pauli_str, A[i, j]))
-        elif abs(i - j) == 1:  # Off-diagonal terms (X-based encoding)
-            pauli_str = 'I' * min(i, j) + 'X' + 'I' * abs(i - j - 1) + 'X' + 'I' * (N - max(i, j) - 1)
-            pauli_terms.append((pauli_str, A[i, j] / 2))
-hamiltonian = SparsePauliOp.from_list(pauli_terms)
+# Step 3: Quantum solution using HHL (simulator-based)
+# Encode the matrix and vector
+matrix = NumPyMatrix(A)
+observable = MatrixFunctional()
+hhl = HHL(quantum_instance=Aer.get_backend('aer_simulator'))
 
-# Step 3: Prepare |b> state (length must be 2^num_qubits)
-num_qubits = int(np.log2(N))  # N must be a power of 2
-b = np.array([1, 0, 0, 0])  # Example source term (length = N)
-b_norm = b / np.linalg.norm(b)
-qc_b = QuantumCircuit(num_qubits)
-qc_b.initialize(b_norm, qc_b.qubits)
+# Solve the system
+result = hhl.solve(matrix, b, observable)
+solution_state = result.state
 
-# Step 4: Configure HHL with PauliEvolutionGate
-evolution_gate = PauliEvolutionGate(hamiltonian, time=1.0)
-hhl = HHL()
-qc_hhl = hhl.solve(evolution_gate, qc_b)
+# Step 4: Post-process results (measure probabilities)
+qc = QuantumCircuit(2)
+qc.initialize(solution_state, [0, 1])
+qc.measure_all()
 
-# Step 5: Simulate on a backend
-backend = Aer.get_backend('aer_simulator')
-qc_hhl = transpile(qc_hhl, backend)
-result = backend.run(qc_hhl).result()
+# Simulate measurements
+simulator = Aer.get_backend('aer_simulator')
+transpiled_qc = transpile(qc, simulator)
+result = simulator.run(transpiled_qc, shots=1000).result()
+counts = result.get_counts()
 
-print("Solution probabilities:", result.get_counts())
+# Extract probabilities (approximate solution)
+probabilities = {k: v / 1000 for k, v in counts.items()}
+print("\nQuantum solution (probabilities):", probabilities)
