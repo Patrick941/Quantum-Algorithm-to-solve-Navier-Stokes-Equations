@@ -1,6 +1,6 @@
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile
-from qiskit.algorithms import LinearSystemSolver
+from qiskit.algorithms import HHL
 from qiskit.quantum_info import Statevector
 from qiskit.circuit.library import LinearAmplitudeFunction
 from qiskit.utils import QuantumInstance
@@ -13,7 +13,7 @@ b = np.array([1, 0])              # Source term
 x_classical = np.linalg.solve(A, b)
 print(f"Classical solution: {x_classical}")
 
-# Step 3: Quantum setup with updated classes
+# Step 3: Quantum setup with HHL
 # -----------------------------------------
 # (a) Encode the matrix using LinearAmplitudeFunction
 def matrix_to_circuit(A):
@@ -22,10 +22,10 @@ def matrix_to_circuit(A):
 
 # (b) Define the quantum solver
 quantum_instance = QuantumInstance(Aer.get_backend('aer_simulator'))
-solver = LinearSystemSolver(quantum_instance=quantum_instance)
+hhl = HHL(quantum_instance=quantum_instance)
 
 # (c) Solve the system
-result = solver.solve(
+result = hhl.solve(
     matrix=matrix_to_circuit(A),
     vector=b
 )
