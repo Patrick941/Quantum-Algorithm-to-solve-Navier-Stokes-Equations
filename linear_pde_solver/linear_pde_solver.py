@@ -1,36 +1,23 @@
 import numpy as np
-from scipy.linalg import solve_banded
+import scipy.sparse as sp
+import scipy.sparse.linalg as spla
 
 class LinearPDESolver:
-    def __init__(self, a, b, c, f, x_range, t_range, nx, nt):
-        self.a = a
-        self.b = b
-        self.c = c
-        self.f = f
-        self.x_range = x_range
-        self.t_range = t_range
-        self.nx = nx
-        self.nt = nt
-        self.dx = (x_range[1] - x_range[0]) / nx
-        self.dt = (t_range[1] - t_range[0]) / nt
-        self.u = np.zeros((nt+1, nx+1))
+    def __init__(self, N):
+        self.N = N
+        self.A, self.b = self.discretize()
 
-    def initial_conditions(self, u0):
-        self.u[0, :] = u0
-
-    def boundary_conditions(self, left_bc, right_bc):
-        self.u[:, 0] = left_bc
-        self.u[:, -1] = right_bc
+    def discretize(self):
+        h = 1.0 / (self.N + 1)
+        diag_main = 2.0 * np.ones(self.N) / (h * h)
+        diag_off = -1.0 * np.ones(self.N - 1) / (h * h)
+        A = (np.diag(diag_main, 0)
+             + np.diag(diag_off, 1)
+             + np.diag(diag_off, -1))
+        b = np.ones(self.N)
+        return A, b
 
     def solve(self):
-        for n in range(0, self.nt):
-            for i in range(1, self.nx):
-                self.u[n+1, i] = (self.u[n, i] + self.dt * (
-                    self.a * (self.u[n, i+1] - 2*self.u[n, i] + self.u[n, i-1]) / self.dx**2 +
-                    self.b * (self.u[n, i+1] - self.u[n, i-1]) / (2*self.dx) +
-                    self.c * self.u[n, i] +
-                    self.f(self.x_range[0] + i*self.dx, self.t_range[0] + n*self.dt)
-                ))
-
-    def get_solution(self):
-        return self.u
+        A_sparse = sp.csr_matrix(self.A)
+        x = spla.spsolve(A_sparse, self.b)
+        return x

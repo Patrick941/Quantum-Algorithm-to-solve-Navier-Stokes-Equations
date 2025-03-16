@@ -1,64 +1,89 @@
+from linear_pde_solver import LinearPDESolver
 import numpy as np
-from qiskit import QuantumCircuit, transpile
+from qiskit import QuantumCircuit
+from qiskit.circuit import Parameter
 from qiskit_aer import AerSimulator
+from scipy.optimize import minimize
 
 class QuantumLinearPDESolver:
-    def __init__(self, a, b, c, f, x_range, t_range, nx, nt):
-        self.a = a
-        self.b = b
-        self.c = c
-        self.f = f
-        self.x_range = x_range
-        self.t_range = t_range
-        self.nx = nx
-        self.nt = nt
-        self.dx = (x_range[1] - x_range[0]) / nx
-        self.dt = (t_range[1] - t_range[0]) / nt
-        self.u = np.zeros((nt + 1, nx + 1))
-        self.backend = AerSimulator()
-        self.max_amplitude = 0.2
-        self.measurement_scale = 0.1
+    def __init__(self, N, max_iter=100):
+        self.N = N                    # Number of grid points
+        self.max_iter = max_iter      # Optimization steps
+        self.A, self.b = self.discretize()  # Discretized system
 
-    def initial_conditions(self, u0):
-        self.u[0, :] = u0
+    def discretize(self):
+        # Discretization using a simple finite difference scheme
+        A = 2 * np.eye(self.N) - np.eye(self.N, k=1) - np.eye(self.N, k=-1)
+        b = np.ones(self.N)
+        return A, b
 
-    def boundary_conditions(self, left_bc, right_bc):
-        self.u[:, 0] = left_bc
-        self.u[:, -1] = right_bc
+    def construct_ansatz(self):
+        # Two-qubit parameterized ansatz for N=2
+        theta1 = Parameter('θ1')
+        theta2 = Parameter('θ2')
+        qc = QuantumCircuit(2)
+        qc.ry(theta1, 0)  # Rotation on qubit 0
+        qc.ry(theta2, 1)  # Rotation on qubit 1
+        qc.cx(0, 1)       # Entanglement between qubits
+        qc.save_statevector()
+        return qc
+
+    def encode_b(self):
+        # Encode |b> as |+>|+> state (H|0> H|0>)
+        qc = QuantumCircuit(2)
+        qc.h(0)  # Apply Hadamard gate to qubit 0
+        qc.h(1)  # Apply Hadamard gate to qubit 1
+        qc.save_statevector()
+        return qc
+
+    def cost_function(self, theta_values):
+        sim = AerSimulator(method="statevector")
+        
+        # Construct the ansatz and bind parameters
+        ansatz = self.construct_ansatz()
+        param_dict = {param: theta_values[i] for i, param in enumerate(ansatz.parameters)}
+        ansatz.assign_parameters(param_dict, inplace=True)
+        
+        # Compute |x(θ)>
+        job_x = sim.run(ansatz)
+        x_state = np.asarray(job_x.result().get_statevector(ansatz))
+        
+        # Compute A|x(θ)>
+        Ax = self.A @ x_state
+
+        # Compute |b>
+        b_circuit = self.encode_b()
+        job_b = sim.run(b_circuit)
+        b_state = np.asarray(job_b.result().get_statevector(b_circuit))
+
+        # Compute the squared norm ||Ax - b||^2
+        cost = np.linalg.norm(Ax - b_state) ** 2
+        return cost
 
     def solve(self):
-        for n in range(self.nt):
-            for i in range(1, self.nx):
-                laplacian = (self.u[n, i + 1] - 2 * self.u[n, i] + self.u[n, i - 1]) / self.dx**2
-                gradient = (self.u[n, i + 1] - self.u[n, i - 1]) / (2 * self.dx)
-                x = self.x_range[0] + i * self.dx
-                t = self.t_range[0] + n * self.dt
-                quantum_term = self.quantum_update_step(laplacian, gradient, self.u[n, i], self.f(x, t))
-                self.u[n + 1, i] = self.u[n, i] + self.dt * (
-                    self.a * laplacian +
-                    self.b * gradient +
-                    self.c * self.u[n, i] +
-                    self.f(x, t)
-                ) + quantum_term
+        # Initial guess for parameters
+        initial_theta = np.array([0.1, 0.1])  # Two parameters for the two-qubit ansatz
+        
+        # Optimize using a classical optimizer
+        result = minimize(self.cost_function, initial_theta, method='COBYLA')
+        
+        # Get the optimized parameters
+        optimized_theta = result.x
+        
+        # Get final solution |x(θ)> using the optimized theta
+        ansatz = self.construct_ansatz()
+        param_dict = {param: optimized_theta[i] for i, param in enumerate(ansatz.parameters)}
+        ansatz.assign_parameters(param_dict, inplace=True)
+        sim = AerSimulator(method="statevector")
+        job_final = sim.run(ansatz)
+        x_quantum = np.asarray(job_final.result().get_statevector(ansatz))
+        return x_quantum
 
-    def quantum_update_step(self, laplacian, gradient, u_current, f_val):
-        qc = QuantumCircuit(3, 1)
-        theta = np.arctan(self.max_amplitude * (
-            self.a * laplacian +
-            self.b * gradient +
-            self.c * u_current +
-            f_val
-        ))
-        qc.ry(theta, 0)
-        qc.crx(np.pi / 2, 0, 1)
-        qc.crz(np.pi / 2, 0, 2)
-        qc.barrier()
-        qc.h([1, 2])
-        qc.measure([2], [0])
-        job = self.backend.run(qc, shots=20)
-        result = job.result()
-        counts = result.get_counts()
-        return self.measurement_scale * (counts.get('0', 0) - counts.get('1', 0)) / 100
-
-    def get_solution(self):
-        return self.u
+if __name__ == "__main__":
+    classical_solver = LinearPDESolver(N=2)
+    x_classical = classical_solver.solve()
+    print("Classical solution:", x_classical)
+    
+    quantum_solver = QuantumLinearPDESolver(N=4)
+    x_quantum = quantum_solver.solve()
+    print("Quantum solution:", x_quantum)
