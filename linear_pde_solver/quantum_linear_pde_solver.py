@@ -78,11 +78,11 @@ def calculate_overlap(parameters, coefficient_set, gate_set, qubits, auxiliary, 
     circ.h(auxiliary)
     circ.measure_all()
     
-    t_circ = transpile(circ, backend, optimization_level=3)
+    # FIX: Reduced optimization level to avoid bug in older Qiskit versions
+    t_circ = transpile(circ, backend, optimization_level=1)  # Changed from 3 to 1
     counts = backend.run(t_circ).result().get_counts()
     overlap_prob = counts.get('0' * 5, 0) / sum(counts.values())
     
-    # Cost function
     cost = 1 - overlap_prob / norm_Ax
     print(f"Cost: {cost}")
     return cost
