@@ -159,9 +159,16 @@ if __name__ == "__main__":
     print("\nSolution state vector:")
     print(solution_state)
 
-    # Verification (example specific)
+    # Define matrix A
     A = 0.55 * np.eye(8) + 0.45 * np.diag([1, 1, 1, 1, -1, -1, -1, -1])
+
+    # Define vector b
     b = np.ones(8) / np.sqrt(8)
+
+    print("Matrix A:")
+    print(A)
+    print("\nVector b:")
+    print(b)
 
     # Convert Statevector to NumPy array
     solution_state_np = np.array(solution_state)
@@ -169,17 +176,10 @@ if __name__ == "__main__":
     # Calculate the solution
     solution = A @ solution_state_np
     solution /= np.linalg.norm(solution)
-
-    # Print matrix A and vector b
-    print("\nMatrix A:")
-    print(A)
-    print("\nVector b:")
-    print(b)
-
     # Solve the linear system classically
     x_classical = np.linalg.solve(A, b)
 
-    # Normalize the classical solution
+    # Normalize the solution
     x_classical /= np.linalg.norm(x_classical)
 
     print("\nClassical solution:")
