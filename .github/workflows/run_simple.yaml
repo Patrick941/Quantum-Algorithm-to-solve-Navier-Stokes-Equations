@@ -26,6 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip list | grep qiskit
+          pip install git+https://github.com/anedumla/quantum_linear_solvers
 
       - name: Run quantum linear PDE solver
         #run: python ./linear_pde_solver/quantum_linear_pde_solver.py
