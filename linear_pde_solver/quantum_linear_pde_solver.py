@@ -122,137 +122,77 @@ class CustomHHLAlgorithm:
         return result.get_counts()
     
 class LibraryHHLAlgorithm:
-    def __init__(self, matrix_params, algorithm_params, state_prep_params):
-        # Matrix parameters
-        self.a = matrix_params.get('a', 1)
-        self.b = matrix_params.get('b', -1/3)
-        
-        # Algorithm parameters
-        self.t = algorithm_params.get('t', 2)
-        self.nl = 2  # Eigenvalue register size
-        self.nb = 1  # Solution register size
-        self.na = 1  # Ancilla register size
-        
-        # State preparation
-        self.theta = state_prep_params.get('theta', 0)
-        
-        # Registers
-        self.num_qubits = self.nb + self.nl + self.na
-        self.qr = QuantumRegister(self.num_qubits)
-        self.cr = ClassicalRegister(self.num_qubits)  # Now defined
-        self.qc = QuantumCircuit(self.qr, self.cr)  # Attach both registers
-        
-        # Build the circuit
-        self._build_circuit()
+    def __init__(self, quantum_instance=None):
+        """
+        Initializes the HHL solver with a quantum instance (default: statevector simulator).
+        """
+        if quantum_instance is None:
+            quantum_instance = QuantumInstance(Aer.get_backend('statevector_simulator'))
+        self.quantum_instance = quantum_instance
+        self.hhl = HHL()
+        self.result = None
+        self.norm_b = None
 
-    def _build_circuit(self):
-        """Example circuit with measurement"""
-        self.qc.h(self.qr[0])  # Example gate
-        self.qc.measure(self.qr, self.cr)  # Map all qubits to classical bits
+    def solve(self, A, b):
+        """
+        Solves the linear system Ax = b using the HHL algorithm.
+        
+        Args:
+            A (np.ndarray): Hermitian matrix of the system.
+            b (np.ndarray): Right-hand side vector of the system.
+        
+        Returns:
+            LinearSolverResult: Result object containing the quantum solution state.
+        """
+        if not np.allclose(A, A.conj().T):
+            raise ValueError("Matrix A must be Hermitian.")
+        norm_b = np.linalg.norm(b)
+        if norm_b == 0:
+            raise ValueError("Vector b must not be all zeros.")
+        b_normalized = b / norm_b
+        problem = LinearSystemProblem(A, b_normalized)
+        self.result = self.hhl.solve(problem, self.quantum_instance)
+        self.norm_b = norm_b
+        return self.result
 
-    def run(self, shots=1024):
-        """Execute the circuit"""
-        simulator = Aer.get_backend('qasm_simulator')
-        result = execute(self.qc, simulator, shots=shots).result()
-        return result.get_counts()
-
+    def get_solution_vector(self):
+        """
+        Extracts and processes the solution vector from the quantum state.
+        
+        Returns:
+            np.ndarray: Classical solution vector derived from the quantum state.
+        """
+        if self.result is None:
+            raise RuntimeError("Run solve() first to obtain a solution.")
+        circuit = self.result.state
+        # Locate ancilla qubit
+        ancilla_reg = next((reg for reg in circuit.qregs if reg.name == 'ancilla'), None)
+        if not ancilla_reg:
+            raise RuntimeError("Ancilla register not found.")
+        ancilla_qubit = circuit.qubits.index(ancilla_reg[0])
+        # Obtain statevector
+        statevector = Statevector(circuit)
+        # Extract solution amplitudes where ancilla is |1>
+        solution_amps = []
+        for idx, amp in enumerate(statevector):
+            if (idx >> ancilla_qubit) & 1:
+                solution_amps.append(amp)
+        if not solution_amps:
+            raise RuntimeError("Post-selection failed; ancilla not in |1> state.")
+        solution_amps = np.array(solution_amps)
+        solution_amps /= np.linalg.norm(solution_amps)  # Normalize
+        solution = solution_amps * self.norm_b  # Scale by original norm
+        return solution
 
 def main():
-    # Using my class
-    print("Running custom HHL")
-    matrix_params = {
-        'a': 1,
-        'b': -1/3
-    }
+    A = np.array([[1, 0], [0, 1]], dtype=float)
+    b = np.array([1, 0], dtype=float)
     
-    algorithm_params = {
-        't': 2,
-        'nl': 2,
-        'nb': 1
-    }
-    
-    state_prep_params = {
-        'theta': 0
-    }
-    
-    # Initialize and run Custom HHL
-    hhl_custom = CustomHHLAlgorithm(matrix_params, algorithm_params, state_prep_params)
-    
-    # Print circuit info
-    print(f"Circuit metrics (Custom HHL):")
-    print(f"Depth: {hhl_custom.qc.depth()}")
-    print(f"CNOTs: {hhl_custom.qc.count_ops().get('cx', 0)}")
-    print(f"Total qubits: {hhl_custom.num_qubits}")
-    
-    # Run simulation
-    counts_custom = hhl_custom.run()
-    
-    # Print results
-    print("\nMeasurement results (Custom HHL):")
-    print(counts_custom)
-
-    # Plotting the results
-    sorted_counts_custom = dict(sorted(counts_custom.items(), key=lambda item: int(item[0], 2)))
-    states_custom = list(sorted_counts_custom.keys())
-    counts_values_custom = list(sorted_counts_custom.values())
-    output_dir = '/'.join(__file__.split('/')[:-1]) + '/Images'
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save the bar plot
-    plt.figure(figsize=(10, 5))
-    plt.bar(states_custom, counts_values_custom)
-    plt.xticks(rotation=45)
-    plt.xlabel('Quantum State')
-    plt.ylabel('Counts')
-    plt.title('Custom HHL Algorithm Measurement Results')
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/custom_hhl_measurement_results.png")
-
-    # Save the quantum circuit diagram
-    plt.figure(figsize=(12, 8))
-    hhl_custom.qc.draw(output='mpl', style='clifford')
-    plt.title('Custom HHL Quantum Circuit')
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/custom_hhl_quantum_circuit.png")
-
-    # Using library HHL
-    print("\nRunning library HHL")
-    hhl_library = LibraryHHLAlgorithm(matrix_params, algorithm_params, state_prep_params)
-    
-    # Print circuit info
-    print(f"Circuit metrics (Library HHL):")
-    print(f"Depth: {hhl_library.qc.depth()}")
-    print(f"CNOTs: {hhl_library.qc.count_ops().get('cx', 0)}")
-    print(f"Total qubits: {hhl_library.num_qubits}")
-    
-    # Run simulation
-    counts_library = hhl_library.run()
-    
-    # Print results
-    print("\nMeasurement results (Library HHL):")
-    print(counts_library)
-
-    # Plotting the results
-    sorted_counts_library = dict(sorted(counts_library.items(), key=lambda item: int(item[0], 2)))
-    states_library = list(sorted_counts_library.keys())
-    counts_values_library = list(sorted_counts_library.values())
-
-    # Save the bar plot
-    plt.figure(figsize=(10, 5))
-    plt.bar(states_library, counts_values_library)
-    plt.xticks(rotation=45)
-    plt.xlabel('Quantum State')
-    plt.ylabel('Counts')
-    plt.title('Library HHL Algorithm Measurement Results')
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/library_hhl_measurement_results.png")
-
-    # Save the quantum circuit diagram
-    plt.figure(figsize=(12, 8))
-    hhl_library.qc.draw(output='mpl', style='clifford')
-    plt.title('Library HHL Quantum Circuit')
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/library_hhl_quantum_circuit.png")
+    # Initialize and solve
+    hhl_solver = HHLClass()
+    result = hhl_solver.solve(A, b)
+    solution = hhl_solver.get_solution_vector()
+    print("Solution vector:", solution)
 
 if __name__ == "__main__":
     main()
