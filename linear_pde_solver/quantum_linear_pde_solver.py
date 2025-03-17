@@ -1,104 +1,101 @@
-from qiskit import QuantumRegister, QuantumCircuit
+from qiskit import QuantumRegister, QuantumCircuit, Aer, execute
 import numpy as np
-from qiskit import Aer, transpile, assemble, execute
 
-t = 2  # This is not optimal; As an exercise, set this to the
-       # value that will get the best results. See section 8 for solution.
+class HHLAlgorithm:
+    def __init__(self, t=2, a=1, b=-1/3, theta=0):
+        self.t = t
+        self.a = a
+        self.b = b
+        self.theta = theta
+        self.num_qubits = 4
+        self.nb = 1  # Solution qubits
+        self.nl = 2  # Eigenvalue qubits
+        
+        self.qr = QuantumRegister(self.num_qubits)
+        self.qc = QuantumCircuit(self.qr)
+        self._build_circuit()
+        
+    def _build_circuit(self):
+        # Define register slices
+        qrb = self.qr[0:self.nb]
+        qrl = self.qr[self.nb:self.nb+self.nl]
+        qra = self.qr[self.nb+self.nl:self.nb+self.nl+1]
 
-NUM_QUBITS = 4  # Total number of qubits
-nb = 1  # Number of qubits representing the solution
-nl = 2  # Number of qubits representing the eigenvalues
+        # State preparation
+        self.qc.ry(2*self.theta, qrb[0])
 
-theta = 0  # Angle defining |b>
+        # Quantum Phase Estimation
+        for qu in qrl:
+            self.qc.h(qu)
+            
+        self.qc.p(self.a*self.t, qrl[0])
+        self.qc.p(self.a*self.t*2, qrl[1])
+        self.qc.u(self.b*self.t, -np.pi/2, np.pi/2, qrb[0])
 
-a = 1  # Matrix diagonal
-b = -1/3  # Matrix off-diagonal
+        # Controlled rotations
+        self._add_controlled_rotations(qrl, qrb)
+        
+        # Inverse QFT
+        self._inverse_qft(qrl)
 
-# Initialize the quantum and classical registers
-qr = QuantumRegister(NUM_QUBITS)
+        # Eigenvalue rotation
+        self._eigenvalue_rotation(qrl, qra)
+        
+        self.qc.measure_all()
 
-# Create a Quantum Circuit
-qc = QuantumCircuit(qr)
+    def _add_controlled_rotations(self, qrl, qrb):
+        # Helper method for controlled rotation blocks
+        for i, factor in enumerate([1, 2]):
+            params = self.b * self.t * factor
+            self.qc.p(np.pi/2, qrb[0])
+            self.qc.cx(qrl[i], qrb[0])
+            self.qc.ry(params, qrb[0])
+            self.qc.cx(qrl[i], qrb[0])
+            self.qc.ry(-params, qrb[0])
+            self.qc.p(3*np.pi/2, qrb[0])
 
-qrb = qr[0:nb]
-qrl = qr[nb:nb+nl]
-qra = qr[nb+nl:nb+nl+1]
+    def _inverse_qft(self, qrl):
+        # Inverse Quantum Fourier Transform
+        self.qc.h(qrl[1])
+        self.qc.rz(-np.pi/4, qrl[1])
+        self.qc.cx(qrl[0], qrl[1])
+        self.qc.rz(np.pi/4, qrl[1])
+        self.qc.cx(qrl[0], qrl[1])
+        self.qc.rz(-np.pi/4, qrl[0])
+        self.qc.h(qrl[0])
 
-# State preparation.
-qc.ry(2*theta, qrb[0])
+    def _eigenvalue_rotation(self, qrl, qra):
+        # Eigenvalue rotation parameters
+        t1 = (-np.pi + np.pi/3 - 2*np.arcsin(1/3))/4
+        t2 = (-np.pi - np.pi/3 + 2*np.arcsin(1/3))/4
+        t3 = (np.pi - np.pi/3 - 2*np.arcsin(1/3))/4
+        t4 = (np.pi + np.pi/3 + 2*np.arcsin(1/3))/4
 
-# QPE with e^{iAt}
-for qu in qrl:
-    qc.h(qu)
+        # Conditional rotations
+        rotations = [(qrl[1], t1), (qrl[0], t2), 
+                    (qrl[1], t3), (qrl[0], t4)]
+        
+        for control_qubit, angle in rotations:
+            self.qc.cx(control_qubit, qra[0])
+            self.qc.ry(angle, qra[0])
 
-qc.p(a*t, qrl[0])
-qc.p(a*t*2, qrl[1])
+    def run(self, shots=1024):
+        simulator = Aer.get_backend('qasm_simulator')
+        result = execute(self.qc, simulator, shots=shots).result()
+        return result.get_counts()
 
-qc.u(b*t, -np.pi/2, np.pi/2, qrb[0])
+def main():
+    # Initialize and run HHL algorithm
+    hhl = HHLAlgorithm(t=2)
+    
+    # Print circuit info
+    print(f"Circuit depth: {hhl.qc.depth()}")
+    print(f"CNOT count: {hhl.qc.count_ops().get('cx', 0)}")
+    
+    # Run simulation and show results
+    counts = hhl.run()
+    print("\nMeasurement results:")
+    print(counts)
 
-
-# Controlled e^{iAt} on \lambda_{1}:
-params=b*t
-
-qc.p(np.pi/2,qrb[0])
-qc.cx(qrl[0],qrb[0])
-qc.ry(params,qrb[0])
-qc.cx(qrl[0],qrb[0])
-qc.ry(-params,qrb[0])
-qc.p(3*np.pi/2,qrb[0])
-
-# Controlled e^{2iAt} on \lambda_{2}:
-params = b*t*2
-
-qc.p(np.pi/2,qrb[0])
-qc.cx(qrl[1],qrb[0])
-qc.ry(params,qrb[0])
-qc.cx(qrl[1],qrb[0])
-qc.ry(-params,qrb[0])
-qc.p(3*np.pi/2,qrb[0])
-
-# Inverse QFT
-qc.h(qrl[1])
-qc.rz(-np.pi/4,qrl[1])
-qc.cx(qrl[0],qrl[1])
-qc.rz(np.pi/4,qrl[1])
-qc.cx(qrl[0],qrl[1])
-qc.rz(-np.pi/4,qrl[0])
-qc.h(qrl[0])
-
-# Eigenvalue rotation
-t1=(-np.pi +np.pi/3 - 2*np.arcsin(1/3))/4
-t2=(-np.pi -np.pi/3 + 2*np.arcsin(1/3))/4
-t3=(np.pi -np.pi/3 - 2*np.arcsin(1/3))/4
-t4=(np.pi +np.pi/3 + 2*np.arcsin(1/3))/4
-
-qc.cx(qrl[1],qra[0])
-qc.ry(t1,qra[0])
-qc.cx(qrl[0],qra[0])
-qc.ry(t2,qra[0])
-qc.cx(qrl[1],qra[0])
-qc.ry(t3,qra[0])
-qc.cx(qrl[0],qra[0])
-qc.ry(t4,qra[0])
-qc.measure_all()
-
-print(f"Depth: {qc.depth()}")
-print(f"CNOTS: {qc.count_ops()['cx']}")
-qc.draw(fold=-1)
-
-
-# Use Aer's qasm_simulator
-simulator = Aer.get_backend('qasm_simulator')
-
-# Transpile the circuit for the simulator
-compiled_circuit = transpile(qc, simulator)
-
-# Assemble the circuit into a Qobj
-qobj = assemble(compiled_circuit)
-
-# Execute the circuit on the qasm simulator
-result = execute(qc, simulator).result()
-
-# Get the counts (measurement results)
-counts = result.get_counts(qc)
-print("\nTotal count for 0 and 1 are:", counts)
+if __name__ == "__main__":
+    main()
