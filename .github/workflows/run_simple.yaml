@@ -28,7 +28,7 @@ jobs:
           pip list | grep qiskit
 
       - name: Run quantum linear PDE solver
-        run: python ./linear_pde_solver/oneline_code.py
+        run: python ./linear_pde_solver/online_code.py
 
       - name: Upload results
         uses: actions/upload-artifact@v4
