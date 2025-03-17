@@ -6,7 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt  # Added for plotting
 import os
 from qiskit.utils import QuantumInstance
-from linear_solvers import HHL
+from qiskit.algorithms.linear_solvers import HHL
+# from linear_solvers import HHL
 
 class CustomHHLAlgorithm:
     def __init__(self, matrix_params, algorithm_params, state_prep_params):
