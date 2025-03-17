@@ -1,177 +1,104 @@
+from qiskit import QuantumRegister, QuantumCircuit
 import numpy as np
-# pylint: disable=line-too-long
-from linear_solvers import NumPyLinearSolver, HHL
-matrix = np.array([[1, -1/3], [-1/3, 1]])
-vector = np.array([1, 0])
-naive_hhl_solution = HHL().solve(matrix, vector)
+from qiskit import Aer, transpile, assemble, execute
 
-classical_solution = NumPyLinearSolver().solve(matrix, vector/np.linalg.norm(vector))
+t = 2  # This is not optimal; As an exercise, set this to the
+       # value that will get the best results. See section 8 for solution.
 
-from linear_solvers.matrices.tridiagonal_toeplitz import TridiagonalToeplitz
-tridi_matrix = TridiagonalToeplitz(1, 1, -1 / 3)
-tridi_solution = HHL().solve(tridi_matrix, vector)
+NUM_QUBITS = 4  # Total number of qubits
+nb = 1  # Number of qubits representing the solution
+nl = 2  # Number of qubits representing the eigenvalues
 
-print('classical state:', classical_solution.state)
-print('naive state:')
-print(naive_hhl_solution.state)
-print('tridiagonal state:')
-print(tridi_solution.state)
+theta = 0  # Angle defining |b>
 
+a = 1  # Matrix diagonal
+b = -1/3  # Matrix off-diagonal
 
+# Initialize the quantum and classical registers
+qr = QuantumRegister(NUM_QUBITS)
 
-print('classical Euclidean norm:', classical_solution.euclidean_norm)
-print('naive Euclidean norm:', naive_hhl_solution.euclidean_norm)
-print('tridiagonal Euclidean norm:', tridi_solution.euclidean_norm)
+# Create a Quantum Circuit
+qc = QuantumCircuit(qr)
 
-from qiskit.quantum_info import Statevector
+qrb = qr[0:nb]
+qrl = qr[nb:nb+nl]
+qra = qr[nb+nl:nb+nl+1]
 
-naive_sv = Statevector(naive_hhl_solution.state).data
-tridi_sv = Statevector(tridi_solution.state).data
+# State preparation.
+qc.ry(2*theta, qrb[0])
 
-# Extract vector components; 10000(bin) == 16 & 10001(bin) == 17
-naive_full_vector = np.array([naive_sv[16], naive_sv[17]])
-tridi_full_vector = np.array([tridi_sv[16], tridi_sv[17]])
+# QPE with e^{iAt}
+for qu in qrl:
+    qc.h(qu)
 
-print('naive raw solution vector:', naive_full_vector)
-print('tridi raw solution vector:', tridi_full_vector)
+qc.p(a*t, qrl[0])
+qc.p(a*t*2, qrl[1])
 
-def get_solution_vector(solution):
-    """Extracts and normalizes simulated state vector
-    from LinearSolverResult."""
-    solution_vector = Statevector(solution.state).data[16:18].real
-    norm = solution.euclidean_norm
-    return norm * solution_vector / np.linalg.norm(solution_vector)
-
-print('full naive solution vector:', get_solution_vector(naive_hhl_solution))
-print('full tridi solution vector:', get_solution_vector(tridi_solution))
-print('classical state:', classical_solution.state)
-
-from scipy.sparse import diags
-
-NUM_QUBITS = 2
-MATRIX_SIZE = 2 ** NUM_QUBITS
-# entries of the tridiagonal Toeplitz symmetric matrix
-# pylint: disable=invalid-name
-a = 1
-b = -1/3
-
-matrix = diags([b, a, b],
-               [-1, 0, 1],
-               shape=(MATRIX_SIZE, MATRIX_SIZE)).toarray()
-
-vector = np.array([1] + [0]*(MATRIX_SIZE - 1))
-# run the algorithms
-classical_solution = NumPyLinearSolver(
-                        ).solve(matrix, vector / np.linalg.norm(vector))
-naive_hhl_solution = HHL().solve(matrix, vector)
-tridi_matrix = TridiagonalToeplitz(NUM_QUBITS, a, b)
-tridi_solution = HHL().solve(tridi_matrix, vector)
-
-print('classical euclidean norm:', classical_solution.euclidean_norm)
-print('naive euclidean norm:', naive_hhl_solution.euclidean_norm)
-print('tridiagonal euclidean norm:', tridi_solution.euclidean_norm)
-
-from qiskit import transpile
-
-MAX_QUBITS = 4
-a = 1
-b = -1/3
-
-i = 1
-# calculate the circuit depths for different number of qubits to compare the use
-# of resources (WARNING: This will take a while to execute)
-naive_depths = []
-tridi_depths = []
-for n_qubits in range(1, MAX_QUBITS+1):
-    matrix = diags([b, a, b],
-                   [-1, 0, 1],
-                   shape=(2**n_qubits, 2**n_qubits)).toarray()
-    vector = np.array([1] + [0]*(2**n_qubits -1))
-
-    naive_hhl_solution = HHL().solve(matrix, vector)
-    tridi_matrix = TridiagonalToeplitz(n_qubits, a, b)
-    tridi_solution = HHL().solve(tridi_matrix, vector)
-
-    naive_qc = transpile(naive_hhl_solution.state,
-                         basis_gates=['id', 'rz', 'sx', 'x', 'cx'])
-    tridi_qc = transpile(tridi_solution.state,
-                         basis_gates=['id', 'rz', 'sx', 'x', 'cx'])
-
-    naive_depths.append(naive_qc.depth())
-    tridi_depths.append(tridi_qc.depth())
-    i +=1
-    
+qc.u(b*t, -np.pi/2, np.pi/2, qrb[0])
 
 
-sizes = [f"{2**n_qubits}×{2**n_qubits}"
-         for n_qubits in range(1, MAX_QUBITS+1)]
-columns = ['size of the system',
-           'quantum_solution depth',
-           'tridi_solution depth']
-data = np.array([sizes, naive_depths, tridi_depths])
-ROW_FORMAT ="{:>23}" * (len(columns) + 2)
-for team, row in zip(columns, data):
-    print(ROW_FORMAT.format(team, *row))
+# Controlled e^{iAt} on \lambda_{1}:
+params=b*t
 
-print('excess:',
-      [naive_depths[i] - tridi_depths[i] for i in range(0, len(naive_depths))])
+qc.p(np.pi/2,qrb[0])
+qc.cx(qrl[0],qrb[0])
+qc.ry(params,qrb[0])
+qc.cx(qrl[0],qrb[0])
+qc.ry(-params,qrb[0])
+qc.p(3*np.pi/2,qrb[0])
 
+# Controlled e^{2iAt} on \lambda_{2}:
+params = b*t*2
 
+qc.p(np.pi/2,qrb[0])
+qc.cx(qrl[1],qrb[0])
+qc.ry(params,qrb[0])
+qc.cx(qrl[1],qrb[0])
+qc.ry(-params,qrb[0])
+qc.p(3*np.pi/2,qrb[0])
 
-from linear_solvers.observables import AbsoluteAverage, MatrixFunctional
+# Inverse QFT
+qc.h(qrl[1])
+qc.rz(-np.pi/4,qrl[1])
+qc.cx(qrl[0],qrl[1])
+qc.rz(np.pi/4,qrl[1])
+qc.cx(qrl[0],qrl[1])
+qc.rz(-np.pi/4,qrl[0])
+qc.h(qrl[0])
 
+# Eigenvalue rotation
+t1=(-np.pi +np.pi/3 - 2*np.arcsin(1/3))/4
+t2=(-np.pi -np.pi/3 + 2*np.arcsin(1/3))/4
+t3=(np.pi -np.pi/3 - 2*np.arcsin(1/3))/4
+t4=(np.pi +np.pi/3 + 2*np.arcsin(1/3))/4
 
+qc.cx(qrl[1],qra[0])
+qc.ry(t1,qra[0])
+qc.cx(qrl[0],qra[0])
+qc.ry(t2,qra[0])
+qc.cx(qrl[1],qra[0])
+qc.ry(t3,qra[0])
+qc.cx(qrl[0],qra[0])
+qc.ry(t4,qra[0])
+qc.measure_all()
 
-NUM_QUBITS = 1
-MATRIX_SIZE = 2 ** NUM_QUBITS
-# entries of the tridiagonal Toeplitz symmetric matrix
-a = 1
-b = -1/3
-
-matrix = diags([b, a, b],
-               [-1, 0, 1],
-               shape=(MATRIX_SIZE, MATRIX_SIZE)).toarray()
-vector = np.array([1] + [0]*(MATRIX_SIZE - 1))
-tridi_matrix = TridiagonalToeplitz(1, a, b)
-
-average_solution = HHL().solve(tridi_matrix,
-                               vector,
-                               AbsoluteAverage())
-classical_average = NumPyLinearSolver(
-                        ).solve(matrix,
-                                vector / np.linalg.norm(vector),
-                                AbsoluteAverage())
-
-print('quantum average:', average_solution.observable)
-print('classical average:', classical_average.observable)
-print('quantum circuit results:', average_solution.circuit_results)
-
-
-
-observable = MatrixFunctional(1, 1 / 2)
-
-functional_solution = HHL().solve(tridi_matrix, vector, observable)
-classical_functional = NumPyLinearSolver(
-                          ).solve(matrix,
-                                  vector / np.linalg.norm(vector),
-                                  observable)
-
-print('quantum functional:', functional_solution.observable)
-print('classical functional:', classical_functional.observable)
-print('quantum circuit results:', functional_solution.circuit_results)
+print(f"Depth: {qc.depth()}")
+print(f"CNOTS: {qc.count_ops()['cx']}")
+qc.draw(fold=-1)
 
 
+# Use Aer's qasm_simulator
+simulator = Aer.get_backend('qasm_simulator')
 
-from qiskit import Aer
+# Transpile the circuit for the simulator
+compiled_circuit = transpile(qc, simulator)
 
-backend = Aer.get_backend('aer_simulator')
-hhl = HHL(1e-3, quantum_instance=backend)
+# Assemble the circuit into a Qobj
+qobj = assemble(compiled_circuit)
 
-accurate_solution = hhl.solve(matrix, vector)
-classical_solution = NumPyLinearSolver(
-                    ).solve(matrix,
-                            vector / np.linalg.norm(vector))
+# Execute the circuit on the qasm simulator
+result = execute(qc, simulator).result()
 
-print(accurate_solution.euclidean_norm)
-print(classical_solution.euclidean_norm)
-
+# Get the counts (measurement results)
+counts = result.get_counts(qc)
+print("\nTotal count for 0 and 1 are:", counts)
