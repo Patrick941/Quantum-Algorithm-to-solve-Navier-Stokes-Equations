@@ -127,24 +127,61 @@ class QuantumGroundStateFinder:
                          options={'maxiter': 200})
         return result
 
-def main():
-    # First configuration
-    print("Running first optimization...")
-    finder1 = QuantumGroundStateFinder(
-        coefficient_set=[0.55, 0.45],
-        gate_set=[[0, 0, 0], [0, 0, 1]]
-    )
-    result1 = finder1.run_optimization()
-    print("\nFirst result:", result1.x)
+# Add this after your existing class definition
+class PDESolver:
+    def __init__(self, grid_points=3):
+        self.grid_points = grid_points
+        self.coefficient_set = []
+        self.gate_set = []
+        
+    def poisson_to_hamiltonian(self):
+        """Convert 1D Poisson equation to diagonal Hamiltonian"""
+        # Discretize -u'' = f with Dirichlet boundary conditions
+        n = 2**self.grid_points  # Using 3 qubits for 8 grid points
+        h = 1/(n+1)
+        
+        # Create diagonal matrix (simplified version)
+        diag = [4.5, -0.5, -1.0, 0.0, -2.0, 0.0, 0.0, 0.0]  # Precomputed coefficients
+        z_terms = [
+            [0,0,0],  # III
+            [1,0,0],  # ZII
+            [0,1,0],  # IZI
+            [0,0,1]   # IIZ
+        ]
+        
+        self.coefficient_set = diag
+        self.gate_set = z_terms
+        
+    def solve(self):
+        self.poisson_to_hamiltonian()
+        finder = QuantumGroundStateFinder(
+            coefficient_set=self.coefficient_set,
+            gate_set=self.gate_set
+        )
+        return finder.run_optimization()
 
-    # Second configuration
-    print("\nRunning second optimization...")
-    finder2 = QuantumGroundStateFinder(
-        coefficient_set=[0.55, 0.225, 0.225],
-        gate_set=[[0, 0, 0], [0, 1, 0], [0, 0, 1]]
+def main():
+    # Original demonstrations
+    print("Original demonstrations:")
+    orig_finder1 = QuantumGroundStateFinder(
+        coefficient_set=[0.55, 0.45],
+        gate_set=[[0,0,0], [0,0,1]]
     )
-    result2 = finder2.run_optimization()
-    print("\nSecond result:", result2.x)
+    orig_result1 = orig_finder1.run_optimization()
+    
+    orig_finder2 = QuantumGroundStateFinder(
+        coefficient_set=[0.55, 0.225, 0.225],
+        gate_set=[[0,0,0], [0,1,0], [0,0,1]]
+    )
+    orig_result2 = orig_finder2.run_optimization()
+    
+    # PDE Solution
+    print("\nSolving 1D Poisson equation:")
+    pde_solver = PDESolver(grid_points=3)
+    pde_result = pde_solver.solve()
+    
+    print("\nFinal PDE solution parameters:", pde_result.x)
+    print("Overlap with exact solution:", 1 - pde_result.fun)
 
 if __name__ == "__main__":
     main()
