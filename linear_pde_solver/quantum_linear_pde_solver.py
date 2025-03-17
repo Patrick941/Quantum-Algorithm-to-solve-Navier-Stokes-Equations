@@ -283,12 +283,24 @@ job = backend.run(qobj)
 result = job.result()
 o = result.get_statevector(circ, decimals=10)
 
-# Verify solution (A = 2I)
-a = 2.0 * np.eye(8)  # A is 2I
-b_norm = b / np.linalg.norm(b)
-x = o / np.linalg.norm(o)
-overlap = np.abs(b_norm.dot(a.dot(x)))**2
-print("Overlap with exact solution:", overlap)
+# Normalize quantum solution
+u_quantum = np.real(o)  # Use real parts (imaginary parts should be ~0)
+u_quantum = u_quantum / np.linalg.norm(u_quantum)  # Normalize
+
+# Exact solution for 1D Poisson equation with f(x) = 1
+def exact_solution(x):
+    return 0.5 * x * (1 - x)
+
+# Grid points (1D domain)
+grid_points = np.linspace(0, 1, 8)[1:-1]  # Exclude boundaries (u(0) = u(1) = 0)
+
+# Exact solution values
+u_exact = exact_solution(grid_points)
+u_exact = u_exact / np.linalg.norm(u_exact)  # Normalize
+
+# Compute overlap (fidelity)
+overlap = np.abs(np.dot(u_quantum, u_exact))**2
+print("Overlap (Fidelity):", overlap)
 
 
 # Extract the quantum solution and scale by 1/2 (since A = 2I)
