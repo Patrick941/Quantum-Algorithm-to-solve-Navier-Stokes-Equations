@@ -266,7 +266,7 @@ gate_set = [[0, 0, 0]]   # Identity gate on all qubits
 b = np.array([1/np.sqrt(8)]*8)
 
 # Run VQLS optimization
-out = minimize(calculate_cost_function, x0=[float(random.randint(0,3000))/1000 for i in range(0, 9)], method="COBYLA", options={'maxiter':200})
+out = minimize(calculate_cost_function, x0=[float(random.randint(0,3000))/1000 for i in range(0, 9)], method="COBYLA", options={'maxiter':2000})
 print(out)
 
 # Post-process solution
