@@ -1,5 +1,3 @@
-# quantum_poisson_1d.py
-
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile
 from qiskit.algorithms import VQLS
