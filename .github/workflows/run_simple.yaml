@@ -30,7 +30,7 @@ jobs:
           pip list | grep aqua
 
       - name: Run quantum linear PDE solver
-        run: python ./linear_pde_solver/online_code.py
+        run: python ./linear_pde_solver/quantum_linear_pde_solver.py
 
       - name: Upload results
         uses: actions/upload-artifact@v4
