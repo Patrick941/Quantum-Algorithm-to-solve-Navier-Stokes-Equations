@@ -5,6 +5,7 @@ import math
 import random
 import numpy as np
 from scipy.optimize import minimize
+import os
 import matplotlib.pyplot as plt
 
 class QuantumGroundStateFinder:
@@ -205,6 +206,8 @@ class PDESolver(QuantumGroundStateFinder):
         plt.ylabel('Solution Value')
         plt.legend()
         plt.grid(True)
+        if not os.path.exists('Images'):
+            os.makedirs('Images')
         plt.savefig('Images/poisson_comparison.png')
 
 def main():
