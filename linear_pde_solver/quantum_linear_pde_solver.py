@@ -1,4 +1,7 @@
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit, Aer, execute
+from qiskit.algorithms import LinearSystemProblem
+from qiskit.utils import QuantumInstance
+from qiskit.quantum_info import Statevector
 import numpy as np
 import matplotlib.pyplot as plt  # Added for plotting
 import os
