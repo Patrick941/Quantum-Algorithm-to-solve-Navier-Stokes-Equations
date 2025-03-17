@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 from qiskit import QuantumCircuit, Aer
 from qiskit.aqua import QuantumInstance
-
+import os
 from vqa_poisson import VQAforPoisson
 
 
@@ -98,8 +98,10 @@ idx1, idx2 = 0, 0
 print('Periodic boundary condition, num_qubits:', data_p['num_qubits'][idx1])
 q_sol = data_p['q_sol'][idx1][idx2]
 cl_sol = data_p['cl_sol'][idx1]
-plot_solution_vectors(q_sol, cl_sol)
-
-
+fig, ax = plot_solution_vectors(q_sol, cl_sol)
+directory = os.path.join(os.path.dirname(os.path.dirname(__file__)),'Images')
+if not os.path.exists(directory):
+    os.makedirs(directory)
+plt.savefig(os.path.join(directory, 'quantum_solution.png'))
 
 print('elapsed time: %.2e'%(time.time() - t0))
