@@ -1,226 +1,177 @@
-import qiskit
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
-from qiskit import Aer, transpile, assemble
-import math
-import random
 import numpy as np
-from scipy.optimize import minimize
-import matplotlib.pyplot as plt
+# pylint: disable=line-too-long
+from linear_solvers import NumPyLinearSolver, HHL
+matrix = np.array([[1, -1/3], [-1/3, 1]])
+vector = np.array([1, 0])
+naive_hhl_solution = HHL().solve(matrix, vector)
 
-class QuantumGroundStateFinder:
-    def __init__(self, coefficient_set, gate_set):
-        self.coefficient_set = coefficient_set
-        self.gate_set = gate_set
-        
-    def apply_fixed_ansatz(self, circ, qubits, parameters):
-        for iz in range(len(qubits)):
-            circ.ry(parameters[0][iz], qubits[iz])
-        circ.cz(qubits[0], qubits[1])
-        circ.cz(qubits[2], qubits[0])
-        for iz in range(len(qubits)):
-            circ.ry(parameters[1][iz], qubits[iz])
-        circ.cz(qubits[1], qubits[2])
-        circ.cz(qubits[2], qubits[0])
-        for iz in range(len(qubits)):
-            circ.ry(parameters[2][iz], qubits[iz])
-        return circ
+classical_solution = NumPyLinearSolver().solve(matrix, vector/np.linalg.norm(vector))
 
-    def had_test(self, gate_type, qubits, auxiliary_index, parameters):
-        qreg = QuantumRegister(4)
-        circ = QuantumCircuit(qreg)
-        circ.h(auxiliary_index)
-        self.apply_fixed_ansatz(circ, qubits, parameters)
-        for ie in range(len(gate_type[0])):
-            if gate_type[0][ie] == 1:
-                circ.cz(auxiliary_index, qubits[ie])
-        for ie in range(len(gate_type[1])):
-            if gate_type[1][ie] == 1:
-                circ.cz(auxiliary_index, qubits[ie])
-        circ.h(auxiliary_index)
-        return circ
+from linear_solvers.matrices.tridiagonal_toeplitz import TridiagonalToeplitz
+tridi_matrix = TridiagonalToeplitz(1, 1, -1 / 3)
+tridi_solution = HHL().solve(tridi_matrix, vector)
 
-    def control_fixed_ansatz(self, circ, qubits, parameters, auxiliary):
-        for i in range(len(qubits)):
-            circ.cry(parameters[0][i], auxiliary, qubits[i])
-        circ.ccx(auxiliary, qubits[1], 4)
-        circ.cz(qubits[0], 4)
-        circ.ccx(auxiliary, qubits[1], 4)
-        circ.ccx(auxiliary, qubits[0], 4)
-        circ.cz(qubits[2], 4)
-        circ.ccx(auxiliary, qubits[0], 4)
-        for i in range(len(qubits)):
-            circ.cry(parameters[1][i], auxiliary, qubits[i])
-        circ.ccx(auxiliary, qubits[2], 4)
-        circ.cz(qubits[1], 4)
-        circ.ccx(auxiliary, qubits[2], 4)
-        circ.ccx(auxiliary, qubits[0], 4)
-        circ.cz(qubits[2], 4)
-        circ.ccx(auxiliary, qubits[0], 4)
-        for i in range(len(qubits)):
-            circ.cry(parameters[2][i], auxiliary, qubits[i])
-        return circ
+print('classical state:', classical_solution.state)
+print('naive state:')
+print(naive_hhl_solution.state)
+print('tridiagonal state:')
+print(tridi_solution.state)
 
-    def control_b(self, circ, auxiliary, qubits):
-        for ia in qubits:
-            circ.ch(auxiliary, ia)
-        return circ
 
-    def special_had_test(self, gate_type, qubits, auxiliary_index, parameters):
-        qreg = QuantumRegister(5)
-        circ = QuantumCircuit(qreg)
-        circ.h(auxiliary_index)
-        self.control_fixed_ansatz(circ, qubits, parameters, auxiliary_index)
-        for ty in range(len(gate_type)):
-            if gate_type[ty] == 1:
-                circ.cz(auxiliary_index, qubits[ty])
-        self.control_b(circ, auxiliary_index, qubits)
-        circ.h(auxiliary_index)
-        return circ
 
-    def calculate_cost_function(self, parameters):
-        parameters = [parameters[0:3], parameters[3:6], parameters[6:9]]
-        overall_sum_1 = 0
-        
-        # First part of cost function
-        for i in range(len(self.gate_set)):
-            for j in range(len(self.gate_set)):
-                circ = self.had_test([self.gate_set[i], self.gate_set[j]], [1,2,3], 0, parameters)
-                backend = Aer.get_backend('aer_simulator')
-                circ.save_statevector()
-                t_circ = transpile(circ, backend)
-                qobj = assemble(t_circ)
-                job = backend.run(qobj)
-                result = job.result()
-                outputstate = np.real(result.get_statevector(circ, decimals=100))
-                m_sum = sum(outputstate[l]**2 for l in range(1, len(outputstate), 2))
-                overall_sum_1 += self.coefficient_set[i] * self.coefficient_set[j] * (1 - 2*m_sum)
+print('classical Euclidean norm:', classical_solution.euclidean_norm)
+print('naive Euclidean norm:', naive_hhl_solution.euclidean_norm)
+print('tridiagonal Euclidean norm:', tridi_solution.euclidean_norm)
 
-        # Second part of cost function
-        overall_sum_2 = 0
-        for i in range(len(self.gate_set)):
-            for j in range(len(self.gate_set)):
-                mult = 1
-                for extra in range(2):
-                    if extra == 0:
-                        circ = self.special_had_test(self.gate_set[i], [1,2,3], 0, parameters)
-                    else:
-                        circ = self.special_had_test(self.gate_set[j], [1,2,3], 0, parameters)
-                    backend = Aer.get_backend('aer_simulator')
-                    circ.save_statevector()
-                    t_circ = transpile(circ, backend)
-                    qobj = assemble(t_circ)
-                    job = backend.run(qobj)
-                    result = job.result()
-                    outputstate = np.real(result.get_statevector(circ, decimals=100))
-                    m_sum = sum(outputstate[l]**2 for l in range(1, len(outputstate), 2))
-                    mult *= (1 - 2*m_sum)
-                overall_sum_2 += self.coefficient_set[i] * self.coefficient_set[j] * mult
+from qiskit.quantum_info import Statevector
 
-        cost = 1 - float(overall_sum_2 / overall_sum_1)
-        print(f"Cost: {cost}")
-        return cost
+naive_sv = Statevector(naive_hhl_solution.state).data
+tridi_sv = Statevector(tridi_solution.state).data
 
-    def run_optimization(self):
-        initial_params = [random.uniform(0, 3) for _ in range(9)]
-        result = minimize(self.calculate_cost_function,
-                         x0=initial_params,
-                         method="COBYLA",
-                         options={'maxiter': 200})
-        return result
+# Extract vector components; 10000(bin) == 16 & 10001(bin) == 17
+naive_full_vector = np.array([naive_sv[16], naive_sv[17]])
+tridi_full_vector = np.array([tridi_sv[16], tridi_sv[17]])
 
-# Modified PDESolver class with proper Hamiltonian construction
-class PDESolver:
-    def __init__(self, grid_points=3):
-        self.grid_points = grid_points
-        self.coefficient_set = []
-        self.gate_set = []
-        
-    def poisson_to_hamiltonian(self):
-        """Proper 1D Poisson equation discretization"""
-        # For -u'' = 1 with Dirichlet BCs using 3 qubits (8 grid points)
-        # Tridiagonal matrix: 2 on diagonal, -1 on off-diagonal
-        # Converted to Pauli terms (simplified example)
-        self.coefficient_set = [1.6, -0.4, -0.4]  # Main terms
-        self.gate_set = [
-            [0,0,0],  # III (identity)
-            [1,1,0],  # ZZ (nearest neighbor coupling)
-            [0,1,1]   # IZZ (next neighbor coupling)
-        ]
-        
-    def solve(self):
-        self.poisson_to_hamiltonian()
-        finder = QuantumGroundStateFinder(
-            coefficient_set=self.coefficient_set,
-            gate_set=self.gate_set
-        )
-        return finder.run_optimization()
+print('naive raw solution vector:', naive_full_vector)
+print('tridi raw solution vector:', tridi_full_vector)
 
-class PDESolver(QuantumGroundStateFinder):
-    def __init__(self, grid_points=3):
-        self.grid_points = grid_points
-        self.x = np.linspace(0, 1, 2**grid_points + 2)[1:-1]  # Grid points
-        super().__init__(coefficient_set=[], gate_set=[])
-        self.poisson_to_hamiltonian()
-        
-    def poisson_to_hamiltonian(self):
-        """Proper 1D Poisson equation discretization"""
-        n = 2**self.grid_points
-        h = 1/(n+1)
-        
-        # Classical finite difference matrix
-        self.A = (2/h**2)*np.eye(n) + (-1/h**2)*np.eye(n,k=1) + (-1/h**2)*np.eye(n,k=-1)
-        
-        # Convert to Pauli terms (diagonal approximation for demonstration)
-        self.coefficient_set = [np.trace(self.A)/n] * n  # Average diagonal
-        self.gate_set = [[1 if i==j else 0 for j in range(self.grid_points)] 
-                        for i in range(self.grid_points)]
+def get_solution_vector(solution):
+    """Extracts and normalizes simulated state vector
+    from LinearSolverResult."""
+    solution_vector = Statevector(solution.state).data[16:18].real
+    norm = solution.euclidean_norm
+    return norm * solution_vector / np.linalg.norm(solution_vector)
+
+print('full naive solution vector:', get_solution_vector(naive_hhl_solution))
+print('full tridi solution vector:', get_solution_vector(tridi_solution))
+print('classical state:', classical_solution.state)
+
+from scipy.sparse import diags
+
+NUM_QUBITS = 2
+MATRIX_SIZE = 2 ** NUM_QUBITS
+# entries of the tridiagonal Toeplitz symmetric matrix
+# pylint: disable=invalid-name
+a = 1
+b = -1/3
+
+matrix = diags([b, a, b],
+               [-1, 0, 1],
+               shape=(MATRIX_SIZE, MATRIX_SIZE)).toarray()
+
+vector = np.array([1] + [0]*(MATRIX_SIZE - 1))
+# run the algorithms
+classical_solution = NumPyLinearSolver(
+                        ).solve(matrix, vector / np.linalg.norm(vector))
+naive_hhl_solution = HHL().solve(matrix, vector)
+tridi_matrix = TridiagonalToeplitz(NUM_QUBITS, a, b)
+tridi_solution = HHL().solve(tridi_matrix, vector)
+
+print('classical euclidean norm:', classical_solution.euclidean_norm)
+print('naive euclidean norm:', naive_hhl_solution.euclidean_norm)
+print('tridiagonal euclidean norm:', tridi_solution.euclidean_norm)
+
+from qiskit import transpile
+
+MAX_QUBITS = 4
+a = 1
+b = -1/3
+
+i = 1
+# calculate the circuit depths for different number of qubits to compare the use
+# of resources (WARNING: This will take a while to execute)
+naive_depths = []
+tridi_depths = []
+for n_qubits in range(1, MAX_QUBITS+1):
+    matrix = diags([b, a, b],
+                   [-1, 0, 1],
+                   shape=(2**n_qubits, 2**n_qubits)).toarray()
+    vector = np.array([1] + [0]*(2**n_qubits -1))
+
+    naive_hhl_solution = HHL().solve(matrix, vector)
+    tridi_matrix = TridiagonalToeplitz(n_qubits, a, b)
+    tridi_solution = HHL().solve(tridi_matrix, vector)
+
+    naive_qc = transpile(naive_hhl_solution.state,
+                         basis_gates=['id', 'rz', 'sx', 'x', 'cx'])
+    tridi_qc = transpile(tridi_solution.state,
+                         basis_gates=['id', 'rz', 'sx', 'x', 'cx'])
+
+    naive_depths.append(naive_qc.depth())
+    tridi_depths.append(tridi_qc.depth())
+    i +=1
     
-    def classical_solution(self):
-        """Solve -u'' = 1 with Dirichlet BCs"""
-        b = np.ones(2**self.grid_points)
-        return np.linalg.solve(self.A, b)
-    
-    def quantum_solution(self, params):
-        """Get normalized quantum state amplitudes"""
-        circ = QuantumCircuit(self.grid_points)
-        self.apply_fixed_ansatz(circ, range(self.grid_points), 
-                               [params[0:3], params[3:6], params[6:9]])
-        backend = Aer.get_backend('aer_simulator')
-        circ.save_statevector()
-        job = backend.run(transpile(circ, backend))
-        return np.real(job.result().get_statevector())
-    
-    def plot_comparison(self, quantum_params):
-        classical = self.classical_solution()
-        quantum = self.quantum_solution(quantum_params)
-        
-        # Normalize and align solutions
-        quantum = quantum * (np.linalg.norm(classical)/np.linalg.norm(quantum))
-        
-        plt.figure(figsize=(10,6))
-        plt.plot(self.x, classical, 'b-', label='Classical', linewidth=2)
-        plt.plot(self.x, quantum[:len(self.x)], 'ro--', label='Quantum')
-        plt.title('1D Poisson Equation Solution Comparison')
-        plt.xlabel('Position')
-        plt.ylabel('Solution Value')
-        plt.legend()
-        plt.grid(True)
-        plt.savefig('Images/poisson_comparison.png')
 
-def main():
-    # Original demonstration
-    print("Original demonstration:")
-    orig_finder = QuantumGroundStateFinder(
-        coefficient_set=[0.55, 0.45],
-        gate_set=[[0,0,0], [0,0,1]]
-    )
-    orig_result = orig_finder.run_optimization()
-    
-    # PDE Solution
-    print("\nSolving 1D Poisson equation:")
-    pde_solver = PDESolver(grid_points=3)
-    pde_result = pde_solver.run_optimization()
-    pde_solver.plot_comparison(pde_result.x)
 
-if __name__ == "__main__":
-    main()
+sizes = [f"{2**n_qubits}×{2**n_qubits}"
+         for n_qubits in range(1, MAX_QUBITS+1)]
+columns = ['size of the system',
+           'quantum_solution depth',
+           'tridi_solution depth']
+data = np.array([sizes, naive_depths, tridi_depths])
+ROW_FORMAT ="{:>23}" * (len(columns) + 2)
+for team, row in zip(columns, data):
+    print(ROW_FORMAT.format(team, *row))
+
+print('excess:',
+      [naive_depths[i] - tridi_depths[i] for i in range(0, len(naive_depths))])
+
+
+
+from linear_solvers.observables import AbsoluteAverage, MatrixFunctional
+
+
+
+NUM_QUBITS = 1
+MATRIX_SIZE = 2 ** NUM_QUBITS
+# entries of the tridiagonal Toeplitz symmetric matrix
+a = 1
+b = -1/3
+
+matrix = diags([b, a, b],
+               [-1, 0, 1],
+               shape=(MATRIX_SIZE, MATRIX_SIZE)).toarray()
+vector = np.array([1] + [0]*(MATRIX_SIZE - 1))
+tridi_matrix = TridiagonalToeplitz(1, a, b)
+
+average_solution = HHL().solve(tridi_matrix,
+                               vector,
+                               AbsoluteAverage())
+classical_average = NumPyLinearSolver(
+                        ).solve(matrix,
+                                vector / np.linalg.norm(vector),
+                                AbsoluteAverage())
+
+print('quantum average:', average_solution.observable)
+print('classical average:', classical_average.observable)
+print('quantum circuit results:', average_solution.circuit_results)
+
+
+
+observable = MatrixFunctional(1, 1 / 2)
+
+functional_solution = HHL().solve(tridi_matrix, vector, observable)
+classical_functional = NumPyLinearSolver(
+                          ).solve(matrix,
+                                  vector / np.linalg.norm(vector),
+                                  observable)
+
+print('quantum functional:', functional_solution.observable)
+print('classical functional:', classical_functional.observable)
+print('quantum circuit results:', functional_solution.circuit_results)
+
+
+
+from qiskit import Aer
+
+backend = Aer.get_backend('aer_simulator')
+hhl = HHL(1e-3, quantum_instance=backend)
+
+accurate_solution = hhl.solve(matrix, vector)
+classical_solution = NumPyLinearSolver(
+                    ).solve(matrix,
+                            vector / np.linalg.norm(vector))
+
+print(accurate_solution.euclidean_norm)
+print(classical_solution.euclidean_norm)
+
