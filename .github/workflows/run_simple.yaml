@@ -24,6 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install pyximport==0.18
           pip install -r requirements.txt
           pip list | grep qiskit
           pip list | grep ignis
