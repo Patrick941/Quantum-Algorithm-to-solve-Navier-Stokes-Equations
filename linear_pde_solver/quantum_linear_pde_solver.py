@@ -5,6 +5,7 @@ import math
 import random
 import numpy as np
 from scipy.optimize import minimize
+import matplotlib.pyplot as plt
 
 class QuantumGroundStateFinder:
     def __init__(self, coefficient_set, gate_set):
@@ -154,14 +155,72 @@ class PDESolver:
         )
         return finder.run_optimization()
 
+class PDESolver(QuantumGroundStateFinder):
+    def __init__(self, grid_points=3):
+        self.grid_points = grid_points
+        self.x = np.linspace(0, 1, 2**grid_points + 2)[1:-1]  # Grid points
+        super().__init__(coefficient_set=[], gate_set=[])
+        self.poisson_to_hamiltonian()
+        
+    def poisson_to_hamiltonian(self):
+        """Proper 1D Poisson equation discretization"""
+        n = 2**self.grid_points
+        h = 1/(n+1)
+        
+        # Classical finite difference matrix
+        self.A = (2/h**2)*np.eye(n) + (-1/h**2)*np.eye(n,k=1) + (-1/h**2)*np.eye(n,k=-1)
+        
+        # Convert to Pauli terms (diagonal approximation for demonstration)
+        self.coefficient_set = [np.trace(self.A)/n] * n  # Average diagonal
+        self.gate_set = [[1 if i==j else 0 for j in range(self.grid_points)] 
+                        for i in range(self.grid_points)]
+    
+    def classical_solution(self):
+        """Solve -u'' = 1 with Dirichlet BCs"""
+        b = np.ones(2**self.grid_points)
+        return np.linalg.solve(self.A, b)
+    
+    def quantum_solution(self, params):
+        """Get normalized quantum state amplitudes"""
+        circ = QuantumCircuit(self.grid_points)
+        self.apply_fixed_ansatz(circ, range(self.grid_points), 
+                               [params[0:3], params[3:6], params[6:9]])
+        backend = Aer.get_backend('aer_simulator')
+        circ.save_statevector()
+        job = backend.run(transpile(circ, backend))
+        return np.real(job.result().get_statevector())
+    
+    def plot_comparison(self, quantum_params):
+        classical = self.classical_solution()
+        quantum = self.quantum_solution(quantum_params)
+        
+        # Normalize and align solutions
+        quantum = quantum * (np.linalg.norm(classical)/np.linalg.norm(quantum))
+        
+        plt.figure(figsize=(10,6))
+        plt.plot(self.x, classical, 'b-', label='Classical', linewidth=2)
+        plt.plot(self.x, quantum[:len(self.x)], 'ro--', label='Quantum')
+        plt.title('1D Poisson Equation Solution Comparison')
+        plt.xlabel('Position')
+        plt.ylabel('Solution Value')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
 def main():
+    # Original demonstration
+    print("Original demonstration:")
+    orig_finder = QuantumGroundStateFinder(
+        coefficient_set=[0.55, 0.45],
+        gate_set=[[0,0,0], [0,0,1]]
+    )
+    orig_result = orig_finder.run_optimization()
+    
     # PDE Solution
     print("\nSolving 1D Poisson equation:")
     pde_solver = PDESolver(grid_points=3)
-    pde_result = pde_solver.solve()
-    
-    print("\nFinal PDE solution parameters:", pde_result.x)
-    print("Overlap with exact solution:", 1 - pde_result.fun)
+    pde_result = pde_solver.run_optimization()
+    pde_solver.plot_comparison(pde_result.x)
 
 if __name__ == "__main__":
     main()
