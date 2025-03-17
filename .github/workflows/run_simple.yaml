@@ -32,8 +32,8 @@ jobs:
       - name: Run quantum linear PDE solver
         run: python ./linear_pde_solver/quantum_linear_pde_solver.py
 
-      - name: Upload Images as artifacts
-        uses: actions/upload-artifact@v3
+      - name: Upload results
+        uses: actions/upload-artifact@v4
         with:
           name: images
           path: ./linear_pde_solver/Images
