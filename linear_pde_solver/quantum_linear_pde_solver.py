@@ -1,65 +1,56 @@
+import qiskit
+from qiskit import QuantumCircuit, Aer, transpile, assemble
 import numpy as np
-from qiskit import QuantumCircuit, Aer, transpile
-from qiskit_algorithms import VQLS  # Updated import
-from qiskit.algorithms.optimizers import COBYLA
-from qiskit.circuit.library import EfficientSU2
-from qiskit.quantum_info import SparsePauliOp
-from qiskit.utils import QuantumInstance
-from qiskit.visualization import plot_histogram
+from scipy.optimize import minimize
+import random
 
-# Step 1: Discretize the Poisson equation (1D example)
-# Define the matrix A and vector b for the linear system Aϕ = b
-A = np.array([[2, -1], [-1, 2]])  # Tridiagonal matrix
-b = np.array([3, 0])  # Right-hand side vector
+def apply_fixed_ansatz(qubits, parameters, circ):
+    for iz in range(len(qubits)):
+        circ.ry(parameters[0][iz], qubits[iz])
+    circ.cz(qubits[0], qubits[1])
+    circ.cz(qubits[2], qubits[0])
+    for iz in range(len(qubits)):
+        circ.ry(parameters[1][iz], qubits[iz])
+    circ.cz(qubits[1], qubits[2])
+    circ.cz(qubits[2], qubits[0])
+    for iz in range(len(qubits)):
+        circ.ry(parameters[2][iz], qubits[iz])
 
-# Classical solution
-classical_solution = np.linalg.solve(A, b)
-print("Classical solution:", classical_solution)
+def run_quantum_simulation(parameters, coefficient_set):
+    circ = QuantumCircuit(3, 3)
+    apply_fixed_ansatz([0, 1, 2], parameters, circ)
+    circ.save_statevector()
+    backend = Aer.get_backend('aer_simulator')
+    t_circ = transpile(circ, backend)
+    qobj = assemble(t_circ)
+    job = backend.run(qobj)
+    result = job.result()
+    return result.get_statevector(circ, decimals=10)
 
-# Step 2: Quantum solution using VQLS
-# Encode A as a sum of Pauli matrices
-pauli_A = SparsePauliOp.from_list([('II', 2), ('XX', -1), ('YY', -1), ('ZZ', -1)])
+def run_classical_simulation(coefficient_set):
+    a1 = coefficient_set[1] * np.array([[1,0,0,0,0,0,0,0], [0,1,0,0,0,0,0,0],
+                                         [0,0,1,0,0,0,0,0], [0,0,0,1,0,0,0,0],
+                                         [0,0,0,0,-1,0,0,0], [0,0,0,0,0,-1,0,0],
+                                         [0,0,0,0,0,0,-1,0], [0,0,0,0,0,0,0,-1]])
+    a2 = coefficient_set[0] * np.array([[1,0,0,0,0,0,0,0], [0,1,0,0,0,0,0,0],
+                                         [0,0,1,0,0,0,0,0], [0,0,0,1,0,0,0,0],
+                                         [0,0,0,0,1,0,0,0], [0,0,0,0,0,1,0,0],
+                                         [0,0,0,0,0,0,1,0], [0,0,0,0,0,0,0,1]])
+    a3 = np.add(a1, a2)
+    b = np.array([float(1/np.sqrt(8))] * 8)
+    return (b.dot(a3.dot(b)) / np.linalg.norm(a3.dot(b))) ** 2
 
-# Encode normalized b as a quantum state
-qc_b = QuantumCircuit(2)
-qc_b.initialize([1, 0], 0)  # |b> = |0>
+def compare_quantum_vs_classical(opt_parameters, coefficient_set):
+    quantum_result = run_quantum_simulation(opt_parameters, coefficient_set)
+    classical_result = run_classical_simulation(coefficient_set)
+    print("Quantum Computation Result:", np.linalg.norm(quantum_result))
+    print("Classical Computation Result:", classical_result)
+    print("Difference:", abs(np.linalg.norm(quantum_result) - classical_result))
 
-# Configure VQLS
-ansatz = EfficientSU2(2, reps=1)  # 2-qubit ansatz
-optimizer = COBYLA(maxiter=100)  # Optimizer
-backend = Aer.get_backend('statevector_simulator')  # Simulator backend
-quantum_instance = QuantumInstance(backend)
+# Optimization setup
+coefficient_set = [0.55, 0.45]
+out = minimize(lambda params: run_quantum_simulation([params[:3], params[3:6], params[6:9]], coefficient_set),
+               x0=[random.uniform(0, 3) for _ in range(9)], method="COBYLA", options={'maxiter': 200})
 
-# Solve using VQLS
-vqls = VQLS(ansatz, optimizer, quantum_instance=quantum_instance)
-result = vqls.solve(pauli_A, qc_b)
-
-# Extract the quantum solution
-solution_circuit = result.solution
-tqc = transpile(solution_circuit, backend)
-tqc.save_statevector()
-statevector = backend.run(tqc).result().get_statevector()
-
-# Normalize the classical solution for comparison
-classical_normalized = classical_solution / np.linalg.norm(classical_solution)
-
-# Step 3: Compare quantum and classical results
-# Method 1: Fidelity check
-fidelity = np.abs(np.dot(statevector, classical_normalized))**2
-print(f"Fidelity between quantum and classical solutions: {fidelity:.4f}")
-
-# Method 2: Error norm
-scaled_quantum = statevector * np.linalg.norm(classical_solution)
-error = np.linalg.norm(scaled_quantum - classical_solution)
-print(f"Error norm between quantum and classical solutions: {error:.4f}")
-
-# Method 3: Measurement sampling
-# Add measurement to the solution circuit
-meas_circuit = solution_circuit.copy()
-meas_circuit.measure_all()
-
-# Simulate measurements
-backend = Aer.get_backend('qasm_simulator')
-counts = backend.run(meas_circuit, shots=1000).result().get_counts()
-print("Measurement counts:", counts)
-plot_histogram(counts)  # Visualize the measurement results
+opt_parameters = [out['x'][0:3], out['x'][3:6], out['x'][6:9]]
+compare_quantum_vs_classical(opt_parameters, coefficient_set)
