@@ -5,6 +5,7 @@ import math
 import random
 import numpy as np
 from scipy.optimize import minimize
+import os
 import matplotlib.pyplot as plt
 
 
@@ -309,4 +310,7 @@ plt.xticks(grid_points)
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.legend()
 plt.title('1D Poisson Equation: $-\Delta u = f$ (Solution)', fontsize=14)
-plt.savefig('Images/quantum_solution.png')
+if not os.path.exists(os.path.join(os.path.dirname(__file__), 'Images')):
+    os.makedirs(os.path.join(os.path.dirname(__file__), 'Images'))
+
+plt.savefig(os.path.join(os.path.dirname(__file__), 'Images', 'quantum_solution.png'))
