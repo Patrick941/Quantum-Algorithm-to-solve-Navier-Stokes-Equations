@@ -28,7 +28,8 @@ jobs:
           pip list | grep qiskit
 
       - name: Run quantum linear PDE solver
-        run: python ./linear_pde_solver/quantum_linear_pde_solver.py
+        #run: python ./linear_pde_solver/quantum_linear_pde_solver.py
+        run: bash ./linear_pde_solver/run.sh
 
       - name: Upload results
         uses: actions/upload-artifact@v4
