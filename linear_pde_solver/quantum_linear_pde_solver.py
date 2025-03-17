@@ -1,47 +1,39 @@
 from qiskit import QuantumCircuit, Aer, transpile
+from qiskit.algorithms import HHL
 from qiskit.quantum_info import Statevector
-from qiskit.algorithms.linear_solvers import HHL
-from qiskit.algorithms.linear_solvers.matrices import TridiagonalToeplitz
-from qiskit.algorithms.linear_solvers.observables import AbsoluteAverage
+from qiskit.algorithms.linear_solvers import NumPyLinearSolver
 import numpy as np
 
-def solve_poisson_1d(n_qubits=3, h=0.25):
-    # Discretize 1D Poisson equation
+def solve_1d_poisson(n_qubits=3):
+    # Create tridiagonal matrix
     N = 2**n_qubits
+    h = 1/(N + 1)
     main_diag = 2/h**2 * np.ones(N)
     off_diag = -1/h**2 * np.ones(N-1)
     
-    # Create tridiagonal Toeplitz matrix
-    matrix = TridiagonalToeplitz(n_qubits, main_diag[0], off_diag[0])
+    # Create matrix using standard numpy array
+    matrix = np.diag(main_diag) + np.diag(off_diag, k=1) + np.diag(off_diag, k=-1)
     
-    # Source term (normalized)
+    # Normalize matrix and vector
+    matrix /= np.linalg.norm(matrix, ord=2)
     b = np.ones(N)
     b /= np.linalg.norm(b)
 
-    # Configure HHL solver
-    hhl_solver = HHL(
-        quantum_instance=Aer.get_backend('statevector_simulator'),
-        epsilon=1e-2
-    )
-
-    # Solve system
-    result = hhl_solver.solve(matrix, b, AbsoluteAverage())
-
-    # Process results
-    solution_vector = Statevector(result.state).data.real
-    norm = result.euclidean_norm
+    # Use basic HHL solver
+    hhl = HHL()
+    result = hhl.solve(matrix, b)
     
-    # Extract meaningful state components
+    # Extract solution components
+    solution_vector = Statevector(result.state).data.real
     solution = {}
     for i, val in enumerate(solution_vector):
-        if np.abs(val) > 1e-5:  # Filter significant components
-            solution[f'|{i:0{n_quplets}b}>'] = norm * val
+        if abs(val) > 1e-5:
+            solution[i] = val * result.euclidean_norm
             
     return solution
 
 if __name__ == "__main__":
-    # Example usage for 3-qubit system (8x8 matrix)
-    solution = solve_poisson_1d(n_qubits=3, h=0.25)
-    print("Quantum Solution Components:")
-    for state, amplitude in solution.items():
-        print(f"{state}: {amplitude:.4f}")
+    solution = solve_1d_poisson(n_qubits=2)
+    print("Quantum Solution:")
+    for state, value in solution.items():
+        print(f"State {bin(state)[2:].zfill(2)}: {value:.4f}")
