@@ -1,7 +1,6 @@
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile, assemble
 from qiskit.quantum_info import SparsePauliOp
-from qiskit.circuit.library import StatePreparation
 from scipy.optimize import minimize
 import random
 
@@ -39,15 +38,18 @@ def decompose_matrix(A):
     gate_set = pauli_decomp.paulis.to_labels()
     return coefficient_set, gate_set
 
-# Step 3: Prepare the quantum state |b>
+# Step 3: Prepare the quantum state |b> manually
 def prepare_state(b):
     """
-    Prepare the quantum state |b> using StatePreparation.
+    Prepare the quantum state |b> using Ry and Rz rotations.
     """
     b_normalized = b / np.linalg.norm(b)
-    qc_b = QuantumCircuit(int(np.log2(len(b_normalized))))
-    qc_b.append(StatePreparation(b_normalized), range(qc_b.num_qubits))
-    return qc_b
+    num_qubits = int(np.ceil(np.log2(len(b_normalized))))
+    qc = QuantumCircuit(num_qubits)
+
+    # Use the initialize method (available in Qiskit 0.27)
+    qc.initialize(b_normalized, range(num_qubits))
+    return qc
 
 # Step 4: Define the fixed ansatz
 def apply_fixed_ansatz(qubits, parameters):
