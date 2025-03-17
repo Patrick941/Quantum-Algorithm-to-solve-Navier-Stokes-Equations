@@ -1,5 +1,3 @@
-
-
 import time
 
 import numpy as np
@@ -9,6 +7,7 @@ from qiskit import QuantumCircuit, Aer
 from qiskit.aqua import QuantumInstance
 
 from vqa_poisson import VQAforPoisson
+
 
 def experiment(bc, num_trials, num_qubits_list, num_layers, qins):
     
@@ -69,8 +68,8 @@ num_trials = 1
 num_qubits_list = [4]
 qins = QuantumInstance(Aer.get_backend('statevector_simulator'), seed_transpiler=42)
 
-# bc: Periodic
 data_p = experiment('Periodic', num_trials, num_qubits_list, num_layers, qins)
+
 
 
 def plot_solution_vectors(q_sol, cl_sol):
@@ -91,12 +90,16 @@ def plot_solution_vectors(q_sol, cl_sol):
     
     return fig, ax
 
+
 idx1, idx2 = 0, 0
+
+
+
 print('Periodic boundary condition, num_qubits:', data_p['num_qubits'][idx1])
 q_sol = data_p['q_sol'][idx1][idx2]
 cl_sol = data_p['cl_sol'][idx1]
 plot_solution_vectors(q_sol, cl_sol)
 
 
-print('elapsed time: %.2e'%(time.time() - t0))
 
+print('elapsed time: %.2e'%(time.time() - t0))
