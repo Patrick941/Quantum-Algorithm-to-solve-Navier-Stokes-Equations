@@ -1,20 +1,12 @@
-import qiskit.tools.jupyter
 import time
+
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 from qiskit import QuantumCircuit, Aer
-from qiskit.utils import QuantumInstance
+from qiskit.aqua import QuantumInstance
+import os
 from vqa_poisson import VQAforPoisson
-
-# Function to handle deprecated imports
-def safe_import():
-    try:
-        import rustworkx as rx
-    except ImportError:
-        import retworkx as rx
-
-safe_import()
 
 def experiment(bc, num_trials, num_qubits_list, num_layers, qins):
     print('-----------' + bc + ' boundary condition --------------')
