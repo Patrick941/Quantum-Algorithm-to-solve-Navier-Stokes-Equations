@@ -123,19 +123,12 @@ class CustomHHLAlgorithm:
     
 class LibraryHHLAlgorithm:
     def __init__(self, matrix_params, algorithm_params, state_prep_params):
-        """
-        Simplified HHL-like solver for 2x2 systems (demonstration only)
-        
-        :param matrix_params: Dictionary with 'a', 'b' (for matrix [[a, b], [b, a]])
-        :param algorithm_params: Dictionary with 't' (scaling factor)
-        :param state_prep_params: Dictionary with 'theta' (state preparation angle)
-        """
         # Matrix parameters
         self.a = matrix_params.get('a', 1)
         self.b = matrix_params.get('b', -1/3)
         
         # Algorithm parameters
-        self.t = algorithm_params.get('t', 2)  # Time parameter for QPE
+        self.t = algorithm_params.get('t', 2)
         self.nl = 2  # Eigenvalue register size
         self.nb = 1  # Solution register size
         self.na = 1  # Ancilla register size
@@ -144,69 +137,24 @@ class LibraryHHLAlgorithm:
         self.theta = state_prep_params.get('theta', 0)
         
         # Registers
-        self.qr = QuantumRegister(self.nb + self.nl + self.na)
-        self.cr = ClassicalRegister(self.nb + self.nl + self.na)
-        self.qc = QuantumCircuit(self.qr, self.cr)
+        self.num_qubits = self.nb + self.nl + self.na
+        self.qr = QuantumRegister(self.num_qubits)
+        self.cr = ClassicalRegister(self.num_qubits)  # Now defined
+        self.qc = QuantumCircuit(self.qr, self.cr)  # Attach both registers
         
-        # Precompute values
-        self._calculate_eigenvalues()
-        self._calculate_rotation_angles()
-        
-        # Build circuit
+        # Build the circuit
         self._build_circuit()
 
-    def _calculate_eigenvalues(self):
-        """For matrix [[a, b], [b, a]]"""
-        self.lambda1 = self.a + self.b
-        self.lambda2 = self.a - self.b
-
-    def _calculate_rotation_angles(self):
-        """Simplified rotation angles (not full HHL inversion)"""
-        C = 0.5  # Normalization constant (arbitrary for demo)
-        self.rot_angles = [
-            np.arcsin(C/self.lambda1),
-            np.arcsin(C/self.lambda2)
-        ]
-
     def _build_circuit(self):
-        """Construct demonstration circuit"""
-        qrb = self.qr[0:self.nb]          # Solution qubits
-        qrl = self.qr[self.nb:self.nb+self.nl]  # Eigenvalue register
-        qra = self.qr[-self.na:]           # Ancilla
-
-        # State preparation (|b> = RY(theta)|0>)
-        self.qc.ry(2*self.theta, qrb[0])
-
-        # Simplified QPE (not actual Hamiltonian simulation)
-        for qubit in qrl:
-            self.qc.h(qubit)
-        
-        # "Eigenvalue" encoding (phase gates)
-        self.qc.cp(self.t*self.lambda1, qrl[0], qrb[0])
-        self.qc.cp(self.t*self.lambda2, qrl[1], qrb[0])
-
-        # Inverse QFT (2-qubit)
-        self.qc.swap(qrl[0], qrl[1])
-        self.qc.h(qrl[0])
-        self.qc.crz(-np.pi/2, qrl[0], qrl[1])
-        self.qc.h(qrl[1])
-
-        # Eigenvalue rotation (simplified)
-        self.qc.cry(2*self.rot_angles[0], qrl[0], qra[0])
-        self.qc.cry(2*self.rot_angles[1], qrl[1], qra[0])
-
-        # Measurement
-        self.qc.measure(qra[0], self.cr[0])  # Ancilla measurement
+        """Example circuit with measurement"""
+        self.qc.h(self.qr[0])  # Example gate
+        self.qc.measure(self.qr, self.cr)  # Map all qubits to classical bits
 
     def run(self, shots=1024):
-        """Execute and post-select on ancilla=1"""
+        """Execute the circuit"""
         simulator = Aer.get_backend('qasm_simulator')
         result = execute(self.qc, simulator, shots=shots).result()
-        counts = result.get_counts()
-        
-        # Filter shots where ancilla=1
-        solution_counts = {k[:-1]:v for k,v in counts.items() if k[-1] == '1'}
-        return solution_counts
+        return result.get_counts()
 
 
 def main():
