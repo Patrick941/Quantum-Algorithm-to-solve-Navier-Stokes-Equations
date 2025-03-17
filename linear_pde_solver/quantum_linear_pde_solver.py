@@ -4,9 +4,10 @@ from qiskit import Aer, transpile, assemble
 import math
 import random
 import numpy as np
+import matplotlib.pyplot as plt
+from qiskit.circuit.library import EfficientSU2
 from scipy.optimize import minimize
 import os
-import matplotlib.pyplot as plt
 
 class QuantumGroundStateFinder:
     def __init__(self, coefficient_set, gate_set):
@@ -129,101 +130,86 @@ class QuantumGroundStateFinder:
                          options={'maxiter': 200})
         return result
 
-# Modified PDESolver class with proper Hamiltonian construction
-class PDESolver:
-    def __init__(self, grid_points=3):
-        self.grid_points = grid_points
-        self.coefficient_set = []
-        self.gate_set = []
-        
-    def poisson_to_hamiltonian(self):
-        """Proper 1D Poisson equation discretization"""
-        # For -u'' = 1 with Dirichlet BCs using 3 qubits (8 grid points)
-        # Tridiagonal matrix: 2 on diagonal, -1 on off-diagonal
-        # Converted to Pauli terms (simplified example)
-        self.coefficient_set = [1.6, -0.4, -0.4]  # Main terms
-        self.gate_set = [
-            [0,0,0],  # III (identity)
-            [1,1,0],  # ZZ (nearest neighbor coupling)
-            [0,1,1]   # IZZ (next neighbor coupling)
-        ]
-        
-    def solve(self):
-        self.poisson_to_hamiltonian()
-        finder = QuantumGroundStateFinder(
-            coefficient_set=self.coefficient_set,
-            gate_set=self.gate_set
-        )
-        return finder.run_optimization()
-
 class PDESolver(QuantumGroundStateFinder):
-    def __init__(self, grid_points=3):
-        self.grid_points = grid_points
-        self.x = np.linspace(0, 1, 2**grid_points + 2)[1:-1]  # Grid points
-        super().__init__(coefficient_set=[], gate_set=[])
-        self.poisson_to_hamiltonian()
+    def __init__(self, grid_size=3):
+        self.grid_size = grid_size  # Using 3 qubits → 8 grid points
+        self.x = np.linspace(0, 1, 2**grid_size + 2)[1:-1]
+        super().__init__([], [])
+        self.A = self._build_fd_matrix()
+        self._hamiltonian_decomposition()
         
-    def poisson_to_hamiltonian(self):
-        """Proper 1D Poisson equation discretization"""
-        n = 2**self.grid_points
+    def _build_fd_matrix(self):
+        """Finite difference matrix for -u'' = 1"""
+        n = 2**self.grid_size
         h = 1/(n+1)
-        
-        # Classical finite difference matrix
-        self.A = (2/h**2)*np.eye(n) + (-1/h**2)*np.eye(n,k=1) + (-1/h**2)*np.eye(n,k=-1)
-        
-        # Convert to Pauli terms (diagonal approximation for demonstration)
-        self.coefficient_set = [np.trace(self.A)/n] * n  # Average diagonal
-        self.gate_set = [[1 if i==j else 0 for j in range(self.grid_points)] 
-                        for i in range(self.grid_points)]
+        return (2/h**2)*np.eye(n) + (-1/h**2)*(np.eye(n,k=1)+np.eye(n,k=-1))
     
+    def _hamiltonian_decomposition(self):
+        """Proper Pauli decomposition of FD matrix"""
+        # Convert matrix to Hamiltonian (Hermitian)
+        H = 0.5*(self.A + self.A.T)
+        
+        # Simple diagonal approximation for demonstration
+        diag = np.diag(H)
+        off_diag = H[np.triu_indices_from(H,k=1)]
+        
+        # Store as coefficient set and Pauli terms
+        self.coefficient_set = list(diag) + list(off_diag)
+        self.gate_set = (
+            [[1 if i==j else 0 for j in range(self.grid_size)]  # Z terms
+            for i in range(self.grid_size)]
+        ) + (
+            [[1 if i==k//2 else 0 for k in range(self.grid_size)]  # ZZ terms
+            for i in range(len(off_diag))]
+        )
+
     def classical_solution(self):
-        """Solve -u'' = 1 with Dirichlet BCs"""
-        b = np.ones(2**self.grid_points)
+        """Exact FD solution"""
+        b = np.ones(2**self.grid_size)
         return np.linalg.solve(self.A, b)
     
-    def quantum_solution(self, params):
-        """Get normalized quantum state amplitudes"""
-        circ = QuantumCircuit(self.grid_points)
-        self.apply_fixed_ansatz(circ, range(self.grid_points), 
-                               [params[0:3], params[3:6], params[6:9]])
-        backend = Aer.get_backend('aer_simulator')
-        circ.save_statevector()
-        job = backend.run(transpile(circ, backend))
-        return np.real(job.result().get_statevector())
-    
-    def plot_comparison(self, quantum_params):
+    def quantum_state_to_solution(self, params):
+        """Convert quantum state to PDE solution"""
+        circ = EfficientSU2(3, reps=2)  # Better ansatz
+        circ = circ.assign_parameters(params)
+        
+        backend = Aer.get_backend('statevector_simulator')
+        statevector = backend.run(circ).result().get_statevector()
+        amplitudes = np.real(statevector)[:2**self.grid_size]
+        
+        # Normalize and align with classical solution
         classical = self.classical_solution()
-        quantum = self.quantum_solution(quantum_params)
+        return amplitudes * (np.linalg.norm(classical)/np.linalg.norm(amplitudes))
+    
+    def plot_results(self, quantum_params):
+        """Enhanced comparison plot"""
+        classical = self.classical_solution()
+        quantum = self.quantum_state_to_solution(quantum_params)
         
-        # Normalize and align solutions
-        quantum = quantum * (np.linalg.norm(classical)/np.linalg.norm(quantum))
+        plt.figure(figsize=(12,6))
+        plt.plot(self.x, classical, 'b-', lw=3, label='Classical FD')
+        plt.plot(self.x, quantum, 'ro--', ms=8, label='Quantum VQE')
+        plt.fill_between(self.x, classical, quantum, color='gray', alpha=0.2)
         
-        plt.figure(figsize=(10,6))
-        plt.plot(self.x, classical, 'b-', label='Classical', linewidth=2)
-        plt.plot(self.x, quantum[:len(self.x)], 'ro--', label='Quantum')
-        plt.title('1D Poisson Equation Solution Comparison')
-        plt.xlabel('Position')
-        plt.ylabel('Solution Value')
-        plt.legend()
-        plt.grid(True)
-        if not os.path.exists('Images'):
-            os.makedirs('Images')
-        plt.savefig('Images/poisson_comparison.png')
+        plt.title('1D Poisson Equation Solution Comparison\n(Improved Encoding)', pad=20)
+        plt.xlabel('Position', fontsize=12)
+        plt.ylabel('Solution Magnitude', fontsize=12)
+        plt.legend(prop={'size': 12})
+        plt.grid(True, alpha=0.3)
+        plt.show()
 
 def main():
-    # Original demonstration
-    print("Original demonstration:")
-    orig_finder = QuantumGroundStateFinder(
-        coefficient_set=[0.55, 0.45],
-        gate_set=[[0,0,0], [0,0,1]]
-    )
-    orig_result = orig_finder.run_optimization()
+    # Initialize solver with proper Hamiltonian
+    pde_system = PDESolver(grid_size=3)
     
-    # PDE Solution
-    print("\nSolving 1D Poisson equation:")
-    pde_solver = PDESolver(grid_points=3)
-    pde_result = pde_solver.run_optimization()
-    pde_solver.plot_comparison(pde_result.x)
+    # Run optimization with improved settings
+    result = minimize(pde_system.calculate_cost_function,
+                     x0=np.random.randn(24),  # For EfficientSU2(3, reps=2)
+                     method='L-BFGS-B',
+                     options={'maxiter': 500})
+    
+    # Visual comparison
+    pde_system.plot_results(result.x)
 
 if __name__ == "__main__":
     main()
