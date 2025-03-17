@@ -1,4 +1,4 @@
-from qiskit import QuantumRegister, QuantumCircuit, Aer, execute
+from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit, Aer, execute
 import numpy as np
 import matplotlib.pyplot as plt  # Added for plotting
 import os
