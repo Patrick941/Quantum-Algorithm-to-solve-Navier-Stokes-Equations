@@ -1,6 +1,7 @@
 from qiskit import QuantumRegister, QuantumCircuit, Aer, execute
 import numpy as np
 import matplotlib.pyplot as plt  # Added for plotting
+import os
 
 class HHLAlgorithm:
     def __init__(self, matrix_params, algorithm_params, state_prep_params):
@@ -155,8 +156,8 @@ def main():
     sorted_counts = dict(sorted(counts.items(), key=lambda item: int(item[0], 2)))
     states = list(sorted_counts.keys())
     counts_values = list(sorted_counts.values())
-
     output_dir = '/'.join(__file__.split('/')[:-1]) + '/Images'
+    os.makedirs(output_dir, exist_ok=True)
 
     # Save the bar plot
     plt.figure(figsize=(10, 5))
