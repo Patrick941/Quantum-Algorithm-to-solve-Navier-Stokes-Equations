@@ -2,8 +2,10 @@ from qiskit import QuantumRegister, QuantumCircuit, Aer, execute
 import numpy as np
 import matplotlib.pyplot as plt  # Added for plotting
 import os
+from qiskit.utils import QuantumInstance
+from qiskit.algorithms.linear_solvers import HHL
 
-class HHLAlgorithm:
+class CustomHHLAlgorithm:
     def __init__(self, matrix_params, algorithm_params, state_prep_params):
         """
         Initialize HHL algorithm with parameters
@@ -118,9 +120,52 @@ class HHLAlgorithm:
         simulator = Aer.get_backend('qasm_simulator')
         result = execute(self.qc, simulator, shots=shots).result()
         return result.get_counts()
+    
+class LibraryHHLAlgorithm:
+    def __init__(self, matrix_params, algorithm_params, state_prep_params):
+        # Extract parameters
+        self.a = matrix_params.get('a', 1)
+        self.b_val = matrix_params.get('b', 0)
+        theta = state_prep_params.get('theta', 0)
+
+        # Build a symmetric 2x2 matrix: A = [[a, b], [b, a]]
+        self.A = np.array([[self.a, self.b_val],
+                           [self.b_val, self.a]])
+        # Construct vector b from state preparation parameters: [cos(theta), sin(theta)]
+        self.b = np.array([np.cos(theta), np.sin(theta)])
+
+        # (Optional) Store algorithm parameters if needed later.
+        self.algorithm_params = algorithm_params
+
+        # Set up the quantum instance using a simulator
+        self.backend = Aer.get_backend('statevector_simulator')
+        self.quantum_instance = QuantumInstance(self.backend)
+
+        # Initialize the HHL solver
+        self.hhl_solver = HHL(quantum_instance=self.quantum_instance)
+
+        # Construct the quantum circuit for the HHL algorithm.
+        # Note: construct_circuit is a helper function that returns the circuit before measurement.
+        self.qc = self.hhl_solver.construct_circuit(self.A, self.b)
+        self.num_qubits = self.qc.num_qubits
+        
+    def run(self):
+        # Copy the circuit and add measurements to all qubits
+        qc_meas = self.qc.copy()
+        cr = ClassicalRegister(qc_meas.num_qubits)
+        qc_meas.add_register(cr)
+        qc_meas.measure(qc_meas.qubits, cr)
+
+        # Execute the circuit on the same simulator but with shots to get counts.
+        job = execute(qc_meas, backend=self.backend, shots=1024)
+        result = job.result()
+        counts = result.get_counts()
+        return counts
+
 
 def main():
-    # Configuration parameters
+    # Using my class
+    print("Running custom HHL")
     matrix_params = {
         'a': 1,
         'b': -1/3
@@ -136,45 +181,84 @@ def main():
         'theta': 0
     }
     
-    # Initialize and run HHL
-    hhl = HHLAlgorithm(matrix_params, algorithm_params, state_prep_params)
+    # Initialize and run Custom HHL
+    hhl_custom = CustomHHLAlgorithm(matrix_params, algorithm_params, state_prep_params)
     
     # Print circuit info
-    print(f"Circuit metrics:")
-    print(f"Depth: {hhl.qc.depth()}")
-    print(f"CNOTs: {hhl.qc.count_ops().get('cx', 0)}")
-    print(f"Total qubits: {hhl.num_qubits}")
+    print(f"Circuit metrics (Custom HHL):")
+    print(f"Depth: {hhl_custom.qc.depth()}")
+    print(f"CNOTs: {hhl_custom.qc.count_ops().get('cx', 0)}")
+    print(f"Total qubits: {hhl_custom.num_qubits}")
     
     # Run simulation
-    counts = hhl.run()
+    counts_custom = hhl_custom.run()
     
     # Print results
-    print("\nMeasurement results:")
-    print(counts)
+    print("\nMeasurement results (Custom HHL):")
+    print(counts_custom)
 
     # Plotting the results
-    sorted_counts = dict(sorted(counts.items(), key=lambda item: int(item[0], 2)))
-    states = list(sorted_counts.keys())
-    counts_values = list(sorted_counts.values())
+    sorted_counts_custom = dict(sorted(counts_custom.items(), key=lambda item: int(item[0], 2)))
+    states_custom = list(sorted_counts_custom.keys())
+    counts_values_custom = list(sorted_counts_custom.values())
     output_dir = '/'.join(__file__.split('/')[:-1]) + '/Images'
     os.makedirs(output_dir, exist_ok=True)
 
     # Save the bar plot
     plt.figure(figsize=(10, 5))
-    plt.bar(states, counts_values)
+    plt.bar(states_custom, counts_values_custom)
     plt.xticks(rotation=45)
     plt.xlabel('Quantum State')
     plt.ylabel('Counts')
-    plt.title('HHL Algorithm Measurement Results')
+    plt.title('Custom HHL Algorithm Measurement Results')
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/hhl_measurement_results.png")
+    plt.savefig(f"{output_dir}/custom_hhl_measurement_results.png")
 
     # Save the quantum circuit diagram
     plt.figure(figsize=(12, 8))
-    hhl.qc.draw(output='mpl', style='clifford')
-    plt.title('HHL Quantum Circuit')
+    hhl_custom.qc.draw(output='mpl', style='clifford')
+    plt.title('Custom HHL Quantum Circuit')
     plt.tight_layout()
-    plt.savefig(f"{output_dir}/hhl_quantum_circuit.png")
+    plt.savefig(f"{output_dir}/custom_hhl_quantum_circuit.png")
+
+    # Using library HHL
+    print("\nRunning library HHL")
+    hhl_library = LibraryHHLAlgorithm(matrix_params, algorithm_params, state_prep_params)
+    
+    # Print circuit info
+    print(f"Circuit metrics (Library HHL):")
+    print(f"Depth: {hhl_library.qc.depth()}")
+    print(f"CNOTs: {hhl_library.qc.count_ops().get('cx', 0)}")
+    print(f"Total qubits: {hhl_library.num_qubits}")
+    
+    # Run simulation
+    counts_library = hhl_library.run()
+    
+    # Print results
+    print("\nMeasurement results (Library HHL):")
+    print(counts_library)
+
+    # Plotting the results
+    sorted_counts_library = dict(sorted(counts_library.items(), key=lambda item: int(item[0], 2)))
+    states_library = list(sorted_counts_library.keys())
+    counts_values_library = list(sorted_counts_library.values())
+
+    # Save the bar plot
+    plt.figure(figsize=(10, 5))
+    plt.bar(states_library, counts_values_library)
+    plt.xticks(rotation=45)
+    plt.xlabel('Quantum State')
+    plt.ylabel('Counts')
+    plt.title('Library HHL Algorithm Measurement Results')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/library_hhl_measurement_results.png")
+
+    # Save the quantum circuit diagram
+    plt.figure(figsize=(12, 8))
+    hhl_library.qc.draw(output='mpl', style='clifford')
+    plt.title('Library HHL Quantum Circuit')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/library_hhl_quantum_circuit.png")
 
 if __name__ == "__main__":
     main()
