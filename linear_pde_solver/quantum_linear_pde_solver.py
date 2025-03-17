@@ -1,5 +1,6 @@
 from qiskit import QuantumRegister, QuantumCircuit, Aer, execute
 import numpy as np
+import matplotlib.pyplot as plt  # Added for plotting
 
 class HHLAlgorithm:
     def __init__(self, matrix_params, algorithm_params, state_prep_params):
@@ -10,6 +11,7 @@ class HHLAlgorithm:
         :param algorithm_params: Dictionary with keys 't', 'nl', 'nb'
         :param state_prep_params: Dictionary with key 'theta'
         """
+        # [Rest of the class remains unchanged]
         # Matrix parameters
         self.a = matrix_params.get('a', 1)
         self.b = matrix_params.get('b', -1/3)
@@ -117,32 +119,61 @@ class HHLAlgorithm:
         return result.get_counts()
 
 def main():
-    # Your PDE parameters
+    # Configuration parameters
     matrix_params = {
-        'a': 1,      # Diagonal element
-        'b': -1/3    # Off-diagonal element (matches discretization)
+        'a': 1,
+        'b': -1/3
     }
-
+    
     algorithm_params = {
-        't': 3*np.pi/4,  # Optimal for eigenvalues 2/3 and 4/3
-        'nl': 2,          # Eigenvalue qubits
-        'nb': 1           # Solution qubits
+        't': 2,
+        'nl': 2,
+        'nb': 1
     }
-
+    
     state_prep_params = {
-        'theta': 0        # Initial state |0>
+        'theta': 0
     }
-
-    # Initialize HHL
+    
+    # Initialize and run HHL
     hhl = HHLAlgorithm(matrix_params, algorithm_params, state_prep_params)
     
-    counts = hhl.run(shots=1000)
+    # Print circuit info
+    print(f"Circuit metrics:")
+    print(f"Depth: {hhl.qc.depth()}")
+    print(f"CNOTs: {hhl.qc.count_ops().get('cx', 0)}")
+    print(f"Total qubits: {hhl.num_qubits}")
+    
+    # Run simulation
+    counts = hhl.run()
+    
+    # Print results
+    print("\nMeasurement results:")
+    print(counts)
 
-    # Filter valid solutions (ancilla=1)
-    valid_results = {k:v for k,v in counts.items() if k[-1] == '1'}
+    # Plotting the results
+    sorted_counts = dict(sorted(counts.items(), key=lambda item: int(item[0], 2)))
+    states = list(sorted_counts.keys())
+    counts_values = list(sorted_counts.values())
 
-    print("Valid solutions (ancilla=1):")
-    print(valid_results)
+    output_dir = '/'.join(__file__.split('/')[:-1]) + '/Images'
+
+    # Save the bar plot
+    plt.figure(figsize=(10, 5))
+    plt.bar(states, counts_values)
+    plt.xticks(rotation=45)
+    plt.xlabel('Quantum State')
+    plt.ylabel('Counts')
+    plt.title('HHL Algorithm Measurement Results')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/hhl_measurement_results.png")
+
+    # Save the quantum circuit diagram
+    plt.figure(figsize=(12, 8))
+    hhl.qc.draw(output='mpl', style='clifford')
+    plt.title('HHL Quantum Circuit')
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/hhl_quantum_circuit.png")
 
 if __name__ == "__main__":
     main()
