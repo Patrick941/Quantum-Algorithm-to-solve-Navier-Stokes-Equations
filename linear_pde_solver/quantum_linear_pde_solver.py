@@ -121,21 +121,10 @@ class HHLAlgorithm:
 
 def main():
     # Configuration parameters
-    matrix_params = {
-        'a': 1,
-        'b': -1/3
-    }
-    
-    algorithm_params = {
-        't': 2,
-        'nl': 2,
-        'nb': 1
-    }
-    
-    state_prep_params = {
-        'theta': 0
-    }
-    
+    matrix_params = {'a': 1, 'b': -1/3}
+    algorithm_params = {'t': 2, 'nl': 2, 'nb': 1}
+    state_prep_params = {'theta': 0}  # Prepares |b> = |0>
+
     # Initialize and run HHL
     hhl = HHLAlgorithm(matrix_params, algorithm_params, state_prep_params)
     
@@ -146,35 +135,54 @@ def main():
     print(f"Total qubits: {hhl.num_qubits}")
     
     # Run simulation
-    counts = hhl.run()
+    counts = hhl.run(shots=8192)  # Increased shots for better statistics
     
-    # Print results
-    print("\nMeasurement results:")
-    print(counts)
+    # Process HHL results with post-selection
+    total_shots = sum(counts.values())
+    hhl_counts_ancilla1 = {k: v for k, v in counts.items() if k.startswith('1')}  # Ancilla is leftmost qubit
+    total_valid = sum(hhl_counts_ancilla1.values())
+    
+    # Calculate HHL probabilities
+    hhl_probs = {'0': 0, '1': 0}
+    for state, cnt in hhl_counts_ancilla1.items():
+        solution_bit = state[-1]  # Solution qubit is rightmost bit
+        hhl_probs[solution_bit] += cnt
+    
+    if total_valid > 0:
+        hhl_prob0 = hhl_probs['0'] / total_valid
+        hhl_prob1 = hhl_probs['1'] / total_valid
+    else:
+        hhl_prob0 = hhl_prob1 = 0.0
 
-    # Plotting the results
-    sorted_counts = dict(sorted(counts.items(), key=lambda item: int(item[0], 2)))
-    states = list(sorted_counts.keys())
-    counts_values = list(sorted_counts.values())
-    output_dir = '/'.join(__file__.split('/')[:-1]) + '/Images'
+    # Compute classical solution
+    A = np.array([[matrix_params['a'], matrix_params['b']],
+                  [matrix_params['b'], matrix_params['a']]])
+    b_vec = np.array([1, 0])  # Initial state |0> corresponds to [1, 0]
+    x_classical = np.linalg.inv(A) @ b_vec
+    x_normalized = x_classical / np.linalg.norm(x_classical)
+    classical_prob0 = x_normalized[0]**2
+    classical_prob1 = x_normalized[1]**2
+
+    # Print comparison
+    print("\nComparison of Results:")
+    print(f"Classical Probabilities: |0> = {classical_prob0:.4f}, |1> = {classical_prob1:.4f}")
+    print(f"HHL Probabilities (Post-Selected): |0> = {hhl_prob0:.4f}, |1> = {hhl_prob1:.4f}")
+    print(f"Absolute Error (|0>): {abs(hhl_prob0 - classical_prob0):.4f}")
+    print(f"Absolute Error (|1>): {abs(hhl_prob1 - classical_prob1):.4f}")
+    print(f"Post-Selection Success Rate: {total_valid/total_shots:.2%}")
+
+    # Plotting
+    output_dir = os.path.dirname(os.path.abspath(__file__)) + '/Images'
     os.makedirs(output_dir, exist_ok=True)
 
-    # Save the bar plot
+    # Plot comparison
     plt.figure(figsize=(10, 5))
-    plt.bar(states, counts_values)
-    plt.xticks(rotation=45)
-    plt.xlabel('Quantum State')
-    plt.ylabel('Counts')
-    plt.title('HHL Algorithm Measurement Results')
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/hhl_measurement_results.png")
-
-    # Save the quantum circuit diagram
-    plt.figure(figsize=(12, 8))
-    hhl.qc.draw(output='mpl', style='clifford')
-    plt.title('HHL Quantum Circuit')
-    plt.tight_layout()
-    plt.savefig(f"{output_dir}/hhl_quantum_circuit.png")
+    plt.bar(['Classical |0>', 'HHL |0>'], [classical_prob0, hhl_prob0], color=['blue', 'orange'])
+    plt.bar(['Classical |1>', 'HHL |1>'], [classical_prob1, hhl_prob1], color=['blue', 'orange'])
+    plt.ylabel('Probability')
+    plt.title('Solution Comparison: Classical vs HHL')
+    plt.savefig(f"{output_dir}/hhl_vs_classical.png")
+    plt.close()
 
 if __name__ == "__main__":
     main()
