@@ -1,2 +1,3 @@
 qiskit==0.23.6
 matplotlib
+nummpy==1.19.1
