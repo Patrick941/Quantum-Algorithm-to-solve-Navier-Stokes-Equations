@@ -1,4 +1,4 @@
-from qiskit import QuantumCircuit, Aer, transpile
+from qiskit import QuantumCircuit, Aer
 from qiskit.quantum_info import Statevector
 from qiskit.circuit.library import QFT
 import numpy as np
@@ -55,7 +55,7 @@ qc.append(QFT(n).inverse(), range(n))
 qc.measure(range(n), range(n))
 
 # Simulate
-backend = Aer.get_backend('qasm_simulator')
+backend = Aer.get_backend('statevector_simulator')
 result = backend.run(qc, shots=1024).result()
 counts = result.get_counts()
 
