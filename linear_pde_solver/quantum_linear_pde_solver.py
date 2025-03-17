@@ -189,7 +189,7 @@ def main():
     b = np.array([1, 0], dtype=float)
     
     # Initialize and solve
-    hhl_solver = HHLClass()
+    hhl_solver = LibraryHHLAlgorithm()
     result = hhl_solver.solve(A, b)
     solution = hhl_solver.get_solution_vector()
     print("Solution vector:", solution)
