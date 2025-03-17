@@ -1,138 +1,157 @@
-from qiskit import QuantumCircuit, transpile
-from qiskit.circuit import Parameter
-
-from qiskit import Aer
-backend = Aer.get_backend('statevector_simulator')
-
-
-
+import qiskit
+from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
+from qiskit import Aer, transpile, assemble
+import math
+import random
 import numpy as np
-from scipy import sparse
-from scipy.sparse import diags
-from scipy.sparse.linalg import eigs
-import matplotlib.pyplot as plt
-plt.rcParams.update({"font.size": 16})  # enlarge matplotlib fonts
+from scipy.optimize import minimize
 
-from qiskit.opflow import MatrixOp
+class QuantumGroundStateFinder:
+    def __init__(self, coefficient_set, gate_set):
+        self.coefficient_set = coefficient_set
+        self.gate_set = gate_set
+        
+    def apply_fixed_ansatz(self, qubits, parameters):
+        circ = QuantumCircuit(3)
+        for iz in range(0, len(qubits)):
+            circ.ry(parameters[0][iz], qubits[iz])
+        circ.cz(qubits[0], qubits[1])
+        circ.cz(qubits[2], qubits[0])
+        for iz in range(0, len(qubits)):
+            circ.ry(parameters[1][iz], qubits[iz])
+        circ.cz(qubits[1], qubits[2])
+        circ.cz(qubits[2], qubits[0])
+        for iz in range(0, len(qubits)):
+            circ.ry(parameters[2][iz], qubits[iz])
+        return circ
 
+    def had_test(self, gate_type, qubits, auxiliary_index, parameters):
+        q_reg = QuantumRegister(4)
+        circ = QuantumCircuit(q_reg)
+        circ.h(auxiliary_index)
+        ansatz_circ = self.apply_fixed_ansatz(qubits, parameters)
+        circ.compose(ansatz_circ, qubits, inplace=True)
+        for ie in range(0, len(gate_type[0])):
+            if (gate_type[0][ie] == 1):
+                circ.cz(auxiliary_index, qubits[ie])
+        for ie in range(0, len(gate_type[1])):
+            if (gate_type[1][ie] == 1):
+                circ.cz(auxiliary_index, qubits[ie])
+        circ.h(auxiliary_index)
+        return circ
 
+    def control_fixed_ansatz(self, qubits, parameters, auxiliary, reg):
+        circ = QuantumCircuit(reg)
+        for i in range(0, len(qubits)):
+            circ.cry(parameters[0][i], auxiliary, qubits[i])
+        circ.ccx(auxiliary, qubits[1], 4)
+        circ.cz(qubits[0], 4)
+        circ.ccx(auxiliary, qubits[1], 4)
+        circ.ccx(auxiliary, qubits[0], 4)
+        circ.cz(qubits[2], 4)
+        circ.ccx(auxiliary, qubits[0], 4)
+        for i in range(0, len(qubits)):
+            circ.cry(parameters[1][i], auxiliary, qubits[i])
+        circ.ccx(auxiliary, qubits[2], 4)
+        circ.cz(qubits[1], 4)
+        circ.ccx(auxiliary, qubits[2], 4)
+        circ.ccx(auxiliary, qubits[0], 4)
+        circ.cz(qubits[2], 4)
+        circ.ccx(auxiliary, qubits[0], 4)
+        for i in range(0, len(qubits)):
+            circ.cry(parameters[2][i], auxiliary, qubits[i])
+        return circ
 
-total_res = {}
+    def control_b(self, auxiliary, qubits):
+        circ = QuantumCircuit(4)
+        for ia in qubits:
+            circ.ch(auxiliary, ia)
+        return circ
 
-N = 4   # number of qubits
-dim = 2**N # dimension of the operator A
+    def special_had_test(self, gate_type, qubits, auxiliary_index, parameters, reg):
+        circ = QuantumCircuit(reg)
+        circ.h(auxiliary_index)
+        ansatz_circ = self.control_fixed_ansatz(qubits, parameters, auxiliary_index, reg)
+        circ.compose(ansatz_circ, inplace=True)
+        for ty in range(0, len(gate_type)):
+            if (gate_type[ty] == 1):
+                circ.cz(auxiliary_index, qubits[ty])
+        b_circ = self.control_b(auxiliary_index, qubits)
+        circ.compose(b_circ, inplace=True)
+        circ.h(auxiliary_index)
+        return circ
 
-# Setup a tridiagonal matrix
-k = [np.ones(dim-1), -2*np.ones(dim), np.ones(dim-1)]
-offset = [-1, 0, 1]
-A = diags(k,offset).toarray()
+    def calculate_cost_function(self, parameters):
+        parameters = [parameters[0:3], parameters[3:6], parameters[6:9]]
+        overall_sum_1 = 0
+        
+        # First part of the cost function
+        for i in range(0, len(self.gate_set)):
+            for j in range(0, len(self.gate_set)):
+                multiply = self.coefficient_set[i] * self.coefficient_set[j]
+                circ = self.had_test([self.gate_set[i], self.gate_set[j]], [1, 2, 3], 0, parameters)
+                backend = Aer.get_backend('aer_simulator')
+                circ.save_statevector()
+                t_circ = transpile(circ, backend)
+                qobj = assemble(t_circ)
+                job = backend.run(qobj)
+                result = job.result()
+                outputstate = np.real(result.get_statevector(circ, decimals=100))
+                m_sum = sum(outputstate[l]**2 for l in range(1, len(outputstate), 2))
+                overall_sum_1 += multiply * (1 - 2*m_sum)
 
-# Setup the driving term f(x) = x
-b = np.linspace(0, 1, dim)
-h = 1/(dim-1)
-sampled_b = b*(h**2)
-bt = np.linspace(0, 1, dim)
+        # Second part of the cost function
+        overall_sum_2 = 0
+        for i in range(0, len(self.gate_set)):
+            for j in range(0, len(self.gate_set)):
+                multiply = self.coefficient_set[i] * self.coefficient_set[j]
+                mult = 1
+                for extra in range(0, 2):
+                    if extra == 0:
+                        circ = self.special_had_test(self.gate_set[i], [1, 2, 3], 0, parameters, QuantumRegister(5))
+                    else:
+                        circ = self.special_had_test(self.gate_set[j], [1, 2, 3], 0, parameters, QuantumRegister(5))
+                    backend = Aer.get_backend('aer_simulator')
+                    circ.save_statevector()
+                    t_circ = transpile(circ, backend)
+                    qobj = assemble(t_circ)
+                    job = backend.run(qobj)
+                    result = job.result()
+                    outputstate = np.real(result.get_statevector(circ, decimals=100))
+                    m_sum = sum(outputstate[l]**2 for l in range(1, len(outputstate), 2))
+                    mult *= (1 - 2*m_sum)
+                overall_sum_2 += multiply * mult
 
-# Setup the Dirichlet B.C.s
-phi_a, phi_b = 0, 0
-sampled_b[0] -= phi_a
-sampled_b[dim-1] -= phi_b
-norm = np.linalg.norm(sampled_b)
-sampled_b = sampled_b/norm
+        cost = 1 - float(overall_sum_2 / overall_sum_1)
+        print(f"Current cost: {cost}")
+        return cost
 
-# Solve the linear system of equations
-x = np.linalg.solve(A, sampled_b)
-f = np.linalg.norm(x)
-x = x/f
+    def run_optimization(self):
+        initial_params = [random.uniform(0, 3) for _ in range(9)]
+        result = minimize(self.calculate_cost_function, 
+                         x0=initial_params, 
+                         method="COBYLA", 
+                         options={'maxiter': 200})
+        return result
 
-# Build Hamiltonian
-sampled_b = sampled_b.reshape([dim, 1])
-Hamiltonian = A@(np.eye(dim)- sampled_b@sampled_b.T)@A
-# print(Hamiltonian)
+def main():
+    # First configuration
+    print("Running first optimization...")
+    finder1 = QuantumGroundStateFinder(
+        coefficient_set=[0.55, 0.45],
+        gate_set=[[0, 0, 0], [0, 0, 1]]
+    )
+    result1 = finder1.run_optimization()
+    print("\nFirst optimization result:", result1)
 
-print("Classical solution:\n", x)
-eig_val, eig_state = np.linalg.eig(Hamiltonian)
-# print("Eigenvalues:\n", eig_val)
-# print(min(eig_val))
-vec = eig_state[:,-1]
-# print(eig_state)
-print("Eigenvector:\n", -vec)
+    # Second configuration
+    print("\nRunning second optimization...")
+    finder2 = QuantumGroundStateFinder(
+        coefficient_set=[0.55, 0.225, 0.225],
+        gate_set=[[0, 0, 0], [0, 1, 0], [0, 0, 1]]
+    )
+    result2 = finder2.run_optimization()
+    print("\nSecond optimization result:", result2)
 
-# Transform into Pauli operators
-H_op = MatrixOp(Hamiltonian).to_pauli_op()
-print("Lenth of Pauli String:",len(H_op))
-# print(H_op)
-
-
-
-from qiskit.circuit.library import EfficientSU2
-
-depth = 5 # depth of ansatz
-ansatz = EfficientSU2(N, entanglement='linear', reps=depth, skip_final_rotation_layer=True).decompose()
-ansatz.draw(fold=300)
-
-
-
-ansatz_opt = transpile(ansatz, backend=backend, optimization_level=3)
-
-print('number and type of gates in the cirucit:', ansatz_opt.count_ops())
-print('number of parameters in the circuit:', ansatz_opt.num_parameters)
-ansatz_opt.draw(fold=300)
-
-from qiskit.algorithms.optimizers import SPSA, COBYLA, L_BFGS_B, NELDER_MEAD, SLSQP, ADAM, AQGD, CG, POWELL, QNSPSA
-
-# optimizer = SPSA(maxiter=500)
-optimizer  = L_BFGS_B(maxiter=5000)
-# optimizer  = ADAM(maxiter=200, lr=0.2)
-# optimizer  = AQGD(maxiter=1000, eta=1.0, tol=1e-06, momentum=0.25, param_tol=1e-06, averaging=10)
-# optimizer  = POWELL()
-# optimizer  = COBYLA(maxiter=10000)
-# optimizer  = SLSQP(maxiter=10000)
-
-
-
-from qiskit.utils import QuantumInstance
-from qiskit.algorithms import VQE
-
-quantum_instance = QuantumInstance(backend=backend, seed_simulator=28, seed_transpiler=28,
-                                        basis_gates=None,
-                                        optimization_level=3)
-
-
-
-
-best_result = 99999
-
-vqe = VQE(ansatz_opt, optimizer,quantum_instance=quantum_instance,initial_point=2*np.pi*np.random.rand(ansatz_opt.num_parameters))
-result = vqe.compute_minimum_eigenvalue(H_op)
-quantum_solution = -1*np.abs(result.eigenstate).real
-print(quantum_solution)
-
-if result.eigenvalue.real < best_result:
-    best_result = result.eigenvalue.real
-    kept_result = result
-print("Current round using ansatz TwoLocal with depth {}, found eigenvalue {}. Best so far {}".format(depth, result.eigenvalue.real,best_result))
-total_res.update({(N, depth):kept_result})
-
-t = np.arange(0., 1., 0.02)
-res = (t**3-t)/6
-norm_res = np.linalg.norm(res)
-res_norm = res/norm_res
-
-xt = np.arange(0,1,1/dim)
-exact = [1/6*(x**3-x) for x in np.arange(0,1,1/dim)]
-norm = np.linalg.norm(exact)
-exact = exact/norm
-
-# red dashes, blue squares and green triangles
-plt.plot(t, res_norm, 'r-', label='analytical')
-plt.plot(bt, x, 'o-.', label='classical')
-plt.plot(bt, quantum_solution, 'gx--', label='quantum')
-# plt.legend()
-plt.legend(loc="lower left")
-plt.xlabel('Boundary [0,1]')
-plt.ylabel('Solution Profile')
-plt.title("4-qubit VQE for Poisson Eqn, TwoLocal, BFGS")
-plt.grid(linestyle = '--', linewidth = 0.5)
-# plt.show()
-# plt.savefig("Poisson.png", bbox_inches='tight', dpi=300)
+if __name__ == "__main__":
+    main()

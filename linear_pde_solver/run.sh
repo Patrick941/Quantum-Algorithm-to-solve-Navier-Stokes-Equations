@@ -1,2 +1,2 @@
 cd "$(dirname "$0")"
-python online_code.py
+python quantum_linear_pde_solver.py
