@@ -161,20 +161,6 @@ class PDESolver:
         return finder.run_optimization()
 
 def main():
-    # Original demonstrations
-    print("Original demonstrations:")
-    orig_finder1 = QuantumGroundStateFinder(
-        coefficient_set=[0.55, 0.45],
-        gate_set=[[0,0,0], [0,0,1]]
-    )
-    orig_result1 = orig_finder1.run_optimization()
-    
-    orig_finder2 = QuantumGroundStateFinder(
-        coefficient_set=[0.55, 0.225, 0.225],
-        gate_set=[[0,0,0], [0,1,0], [0,0,1]]
-    )
-    orig_result2 = orig_finder2.run_optimization()
-    
     # PDE Solution
     print("\nSolving 1D Poisson equation:")
     pde_solver = PDESolver(grid_points=3)
