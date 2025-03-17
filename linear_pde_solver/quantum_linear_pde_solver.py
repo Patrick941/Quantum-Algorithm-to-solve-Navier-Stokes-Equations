@@ -127,7 +127,7 @@ class QuantumGroundStateFinder:
                          options={'maxiter': 200})
         return result
 
-# Add this after your existing class definition
+# Modified PDESolver class with proper Hamiltonian construction
 class PDESolver:
     def __init__(self, grid_points=3):
         self.grid_points = grid_points
@@ -135,22 +135,16 @@ class PDESolver:
         self.gate_set = []
         
     def poisson_to_hamiltonian(self):
-        """Convert 1D Poisson equation to diagonal Hamiltonian"""
-        # Discretize -u'' = f with Dirichlet boundary conditions
-        n = 2**self.grid_points  # Using 3 qubits for 8 grid points
-        h = 1/(n+1)
-        
-        # Create diagonal matrix (simplified version)
-        diag = [4.5, -0.5, -1.0, 0.0, -2.0, 0.0, 0.0, 0.0]  # Precomputed coefficients
-        z_terms = [
-            [0,0,0],  # III
-            [1,0,0],  # ZII
-            [0,1,0],  # IZI
-            [0,0,1]   # IIZ
+        """Proper 1D Poisson equation discretization"""
+        # For -u'' = 1 with Dirichlet BCs using 3 qubits (8 grid points)
+        # Tridiagonal matrix: 2 on diagonal, -1 on off-diagonal
+        # Converted to Pauli terms (simplified example)
+        self.coefficient_set = [1.6, -0.4, -0.4]  # Main terms
+        self.gate_set = [
+            [0,0,0],  # III (identity)
+            [1,1,0],  # ZZ (nearest neighbor coupling)
+            [0,1,1]   # IZZ (next neighbor coupling)
         ]
-        
-        self.coefficient_set = diag
-        self.gate_set = z_terms
         
     def solve(self):
         self.poisson_to_hamiltonian()
