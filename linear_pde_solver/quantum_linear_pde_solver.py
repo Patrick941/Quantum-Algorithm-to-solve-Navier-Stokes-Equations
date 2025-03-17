@@ -205,7 +205,7 @@ class PDESolver(QuantumGroundStateFinder):
         plt.ylabel('Solution Value')
         plt.legend()
         plt.grid(True)
-        plt.show()
+        plt.savefig('Images/poisson_comparison.png')
 
 def main():
     # Original demonstration
