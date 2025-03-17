@@ -1,6 +1,5 @@
 name: run_assignment_main
 
-
 on:
     push:
         branches:
@@ -25,10 +24,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-            pip install -r requirements.txt
-            pip list | grep qiskit
-            pip list | grep ignis
-            pip list | grep aqua
+          pip install -r requirements.txt
+          pip list | grep qiskit
+          pip list | grep ignis
+          pip list | grep aqua
 
       - name: Run quantum linear PDE solver
         run: python ./linear_pde_solver/quantum_linear_pde_solver.py
+
+      - name: Upload Images as artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: images
+          path: ./linear_pde_solver/Images

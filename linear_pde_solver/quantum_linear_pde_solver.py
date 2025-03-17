@@ -5,7 +5,8 @@ import math
 import random
 import numpy as np
 from scipy.optimize import minimize
-
+import os
+import matplotlib.pyplot as plt
 
 
 def apply_fixed_ansatz(qubits, parameters):
@@ -288,3 +289,28 @@ b_norm = b / np.linalg.norm(b)
 x = o / np.linalg.norm(o)
 overlap = np.abs(b_norm.dot(a.dot(x)))**2
 print("Overlap with exact solution:", overlap)
+
+
+# Extract the quantum solution and scale by 1/2 (since A = 2I)
+x_quantum = np.real(o) / 2  # Use real parts (imaginary parts should be ~0)
+
+# Exact solution: x = A^{-1}b = b/2 (since A = 2I)
+x_exact = np.array([1/(2*np.sqrt(8))] * 8)  # Uniform values
+
+# Create grid points (1D domain)
+grid_points = np.arange(8)  # 0 to 7
+
+# Plot
+plt.figure(figsize=(10, 6))
+plt.plot(grid_points, x_quantum, 'bo', markersize=8, label='Quantum Solution')
+plt.plot(grid_points, x_exact, 'r--', linewidth=2, label='Exact Solution')
+plt.xlabel('Grid Point', fontsize=12)
+plt.ylabel('Solution Value', fontsize=12)
+plt.xticks(grid_points)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend()
+plt.title('1D Poisson Equation: $-\Delta u = f$ (Solution)', fontsize=14)
+if not os.path.exists('Images'):
+    os.makedirs('Images')
+
+plt.savefig(os.path.join('Images', 'quantum_solution.png'))
