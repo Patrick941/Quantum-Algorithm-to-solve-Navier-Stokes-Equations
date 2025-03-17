@@ -292,7 +292,7 @@ print("Overlap with exact solution:", overlap)
 
 
 # Extract the quantum solution and scale by 1/2 (since A = 2I)
-x_quantum = np.real(o) / 2  # Use real parts (imaginary parts should be ~0)
+x_quantum = np.real(o)  # Use real parts (imaginary parts should be ~0)
 
 # Exact solution: x = A^{-1}b = b/2 (since A = 2I)
 x_exact = np.array([1/(2*np.sqrt(8))] * 8)  # Uniform values
