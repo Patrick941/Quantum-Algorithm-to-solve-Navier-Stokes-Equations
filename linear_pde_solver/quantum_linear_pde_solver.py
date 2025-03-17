@@ -5,7 +5,6 @@ import math
 import random
 import numpy as np
 from scipy.optimize import minimize
-import os
 import matplotlib.pyplot as plt
 
 
@@ -266,7 +265,7 @@ gate_set = [[0, 0, 0]]   # Identity gate on all qubits
 b = np.array([1/np.sqrt(8)]*8)
 
 # Run VQLS optimization
-out = minimize(calculate_cost_function, x0=[float(random.randint(0,3000))/1000 for i in range(0, 9)], method="COBYLA", options={'maxiter':2000})
+out = minimize(calculate_cost_function, x0=[float(random.randint(0,3000))/1000 for i in range(0, 9)], method="COBYLA", options={'maxiter':200})
 print(out)
 
 # Post-process solution
@@ -283,24 +282,12 @@ job = backend.run(qobj)
 result = job.result()
 o = result.get_statevector(circ, decimals=10)
 
-# Normalize quantum solution
-u_quantum = np.real(o)  # Use real parts (imaginary parts should be ~0)
-u_quantum = u_quantum / np.linalg.norm(u_quantum)  # Normalize
-
-# Exact solution for 1D Poisson equation with f(x) = 1
-def exact_solution(x):
-    return 0.5 * x * (1 - x)
-
-# Grid points (1D domain)
-grid_points = np.linspace(0, 1, 8)[1:-1]  # Exclude boundaries (u(0) = u(1) = 0)
-
-# Exact solution values
-u_exact = exact_solution(grid_points)
-u_exact = u_exact / np.linalg.norm(u_exact)  # Normalize
-
-# Compute overlap (fidelity)
-overlap = np.abs(np.dot(u_quantum, u_exact))**2
-print("Overlap (Fidelity):", overlap)
+# Verify solution (A = 2I)
+a = 2.0 * np.eye(8)  # A is 2I
+b_norm = b / np.linalg.norm(b)
+x = o / np.linalg.norm(o)
+overlap = np.abs(b_norm.dot(a.dot(x)))**2
+print("Overlap with exact solution:", overlap)
 
 
 # Extract the quantum solution and scale by 1/2 (since A = 2I)
@@ -322,7 +309,4 @@ plt.xticks(grid_points)
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.legend()
 plt.title('1D Poisson Equation: $-\Delta u = f$ (Solution)', fontsize=14)
-if not os.path.exists(os.path.join(os.path.dirname(__file__), 'Images')):
-    os.makedirs(os.path.join(os.path.dirname(__file__), 'Images'))
-
-plt.savefig(os.path.join(os.path.dirname(__file__), 'Images', 'quantum_solution.png'))
+plt.savefig('Images/quantum_solution.png')
