@@ -1,6 +1,6 @@
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile
-from qiskit.algorithms import VQLS
+from qiskit_algorithms import VQLS  # Updated import
 from qiskit.algorithms.optimizers import COBYLA
 from qiskit.circuit.library import EfficientSU2
 from qiskit.quantum_info import SparsePauliOp
