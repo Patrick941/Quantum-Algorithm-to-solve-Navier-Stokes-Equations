@@ -1,6 +1,6 @@
 # Import necessary modules from Qiskit
 from qiskit import Aer
-from qiskit.algorithms import Shor
+from qiskit_algorithms.factorizers import Shor
 from qiskit.utils import QuantumInstance
 import numpy as np
 
