@@ -108,7 +108,7 @@ class PoissonSolverClass:
 
 # Example usage
 if __name__ == "__main__":
-    solver = PoissonSolverClass(N=3, K=2, reps=2)
+    solver = PoissonSolverClass(N=8, K=2, reps=2)
     solver.compare_solutions()
     
     results = solver.get_results()

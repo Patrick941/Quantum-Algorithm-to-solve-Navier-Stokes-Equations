@@ -52,16 +52,7 @@ class QAOASolver:
 
     def solve_with_qaoa(self):
         """Solve the problem using QAOA."""
-        # Convert the QP to an operator (Hamiltonian)
-        operator, _ = self.qp.to_ising()
-
-        # Set up the QAOA solver
         qaoa = QAOA(self.sampler, self.optimizer, reps=self.reps)
-
-        # Solve the problem using QAOA
-        qaoa_result = qaoa.compute_minimum_eigenvalue(operator)
-
-        # Convert the QAOA result back to the optimization problem's solution
         qaoa_optimizer = MinimumEigenOptimizer(qaoa)
         self.qaoa_solution = qaoa_optimizer.solve(self.qp)
         return self.qaoa_solution
