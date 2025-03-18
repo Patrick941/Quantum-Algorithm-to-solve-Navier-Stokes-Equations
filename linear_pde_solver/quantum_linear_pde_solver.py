@@ -1,14 +1,15 @@
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile, execute
 from qiskit.quantum_info import Statevector
-from qiskit.algorithms.linear_solvers import NumPyMatrix, HHL
+from linear_solvers import HHL
+from qiskit.aqua.operators import Matrix
 from qiskit.utils import QuantumInstance
 
 # Define the matrix A (Hermitian) and vector b
 A = np.array([[1, 0], [0, 2]], dtype=float)
 b = np.array([1, 0], dtype=float)
 
-# Convert A into a format suitable for HHL
+matrix = Matrix(A)
 matrix = NumPyMatrix(A)
 
 # Set up the quantum instance (simulator)
