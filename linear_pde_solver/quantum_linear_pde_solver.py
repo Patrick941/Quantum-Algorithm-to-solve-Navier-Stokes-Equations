@@ -35,7 +35,14 @@ class PoissonSolverClass:
             for j in range(self.N-1):
                 for k1 in range(self.K):
                     for k2 in range(self.K):
-                        self.qp.minimize(quadratic={(f'x_{i+1}_{k1}', f'x_{j+1}_{k2}'): self.A[i, j] * (2**k1) * (2**k2)})
+                        quadratic_coeff = (self.A.T @ self.A)[i, j] * (2**k1) * (2**k2)
+                        self.qp.minimize(quadratic={(f'x_{i+1}_{k1}', f'x_{j+1}_{k2}'): quadratic_coeff})
+
+        # Add linear terms
+        for i in range(self.N-1):
+            for k in range(self.K):
+                linear_coeff = -2 * (self.b @ self.A)[i] * (2**k)
+                self.qp.minimize(linear={f'x_{i+1}_{k}': linear_coeff})
 
         # Add linear terms
         for i in range(self.N-1):

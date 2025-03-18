@@ -96,3 +96,27 @@ class QAOASolver:
             print("QAOA found the correct optimal solution!")
         else:
             print("QAOA did not find the correct optimal solution.")
+
+if __name__ == "__main__":
+    # Define the linear and quadratic terms for the objective function
+    linear_terms = {'x1': -1, 'x2': -1}
+    quadratic_terms = {('x1', 'x2'): 2}
+
+    # Initialize the QAOA solver
+    solver = QAOASolver(linear_terms, quadratic_terms, reps=2, optimizer=COBYLA(), num_bits=2)
+
+    # Define the problem
+    solver.define_problem()
+
+    # Solve the problem using QAOA
+    qaoa_solution = solver.solve_with_qaoa()
+    print("QAOA Solution:")
+    print(qaoa_solution)
+
+    # Solve the problem classically
+    classical_solution = solver.solve_classically()
+    print("Classical Solution:")
+    print(classical_solution)
+
+    # Compare the results
+    solver.compare_results()
