@@ -1,6 +1,5 @@
 import numpy as np
 from qiskit import QuantumCircuit, Aer, transpile, execute
-from qiskit.circuit.library import HHL
 from qiskit.quantum_info import Statevector
 from qiskit.algorithms.linear_solvers import NumPyMatrix, HHL
 from qiskit.utils import QuantumInstance
