@@ -1,40 +1,27 @@
-import numpy as np
-from qiskit import QuantumCircuit, Aer, transpile, execute
-from qiskit.quantum_info import Statevector
-from linear_solvers import HHL
-from qiskit.aqua.operators import Matrix
+# Import necessary modules from Qiskit
+from qiskit import Aer
+from qiskit.algorithms import Shor
 from qiskit.utils import QuantumInstance
+import numpy as np
 
-# Define the matrix A (Hermitian) and vector b
-A = np.array([[1, 0], [0, 2]], dtype=float)
-b = np.array([1, 0], dtype=float)
+# Set up the quantum simulator backend
+backend = Aer.get_backend('qasm_simulator')
+quantum_instance = QuantumInstance(backend, shots=1024)
 
-matrix = Matrix(A)
-matrix = NumPyMatrix(A)
+# Define a weak RSA modulus (a small composite number)
+N = 15
 
-# Set up the quantum instance (simulator)
-backend = Aer.get_backend('statevector_simulator')
-quantum_instance = QuantumInstance(backend)
+# Initialize Shor's algorithm with the quantum instance
+shor = Shor(quantum_instance=quantum_instance)
 
-# Initialize the HHL solver
-hhl_solver = HHL(quantum_instance=quantum_instance)
+# Run the algorithm to factorize the number
+result = shor.factorize(N)
 
-# Solve the linear system
-result = hhl_solver.solve(matrix, b)
+# Output the factors found by the algorithm
+print(f"Factors of {N}: {result.factors}")
 
-# Extract the quantum state solution
-solution_circuit = result.state
-
-# Transpile and run the circuit to get the statevector
-transpiled_circuit = transpile(solution_circuit, backend)
-job = backend.run(transpiled_circuit)
-statevector = job.result().get_statevector()
-
-# The solution vector is embedded in the statevector; extract and normalize
-# Note: Indices depend on qubit ordering and ancilla qubits
-# This step is heuristic and problem-specific
-solution = np.array([statevector[0], statevector[2]])  # Adjust indices as needed
-solution_normalized = solution / np.linalg.norm(solution)
-
-print("Quantum Solution (Normalized):", solution_normalized)
-print("Classical Solution:", np.linalg.solve(A, b))
+# Verify that the product of the factors equals the original number
+if np.prod(result.factors[0]) == N:
+    print("Verification successful: The product of the factors equals", N)
+else:
+    print("Verification failed")
