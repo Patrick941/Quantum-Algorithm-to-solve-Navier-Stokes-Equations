@@ -1,4 +1,4 @@
-qiskit==0.44.1
+qiskit
 matplotlib
-tqdm==4.60.0
 qiskit_algorithms
+qiskit-optimization
