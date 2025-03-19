@@ -2,6 +2,7 @@ import torch
 import pennylane as qml
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 # Configure PyTorch defaults
 torch.set_default_dtype(torch.float32)
@@ -196,7 +197,10 @@ plt.contourf(X, Y, u_exact, cmap='viridis')
 plt.colorbar()
 plt.title('Exact Solution')
 
-plt.show()
+current_file_directory = os.path.dirname(__file__)
+images_dir = os.path.join(current_file_directory, 'images')
+os.makedirs(images_dir, exist_ok=True)
+plt.savefig(os.path.join(images_dir, 'solution_comparison.png'))
 
 # Compute mean squared error
 mse = np.mean((u_pred - u_exact) ** 2)
