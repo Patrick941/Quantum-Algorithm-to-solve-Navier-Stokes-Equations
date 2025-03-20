@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 class FFT2D:
     def forward(self, f):
@@ -40,3 +40,59 @@ class FFT2D:
             F_copy[i] = np.fft.ifft(F_copy[i])
             
         return F_copy.real
+
+# Example usage and test
+if __name__ == "__main__":
+    # Parameters
+    nx, ny = 64, 64
+    Lx, Ly = 1.0, 1.0
+    x = np.linspace(0, Lx, nx, endpoint=False)
+    y = np.linspace(0, Ly, ny, endpoint=False)
+    X, Y = np.meshgrid(x, y, indexing='ij')
+    
+    # Create test input (2D Gaussian)
+    sigma = 0.1
+    u_original = np.exp(-((X - Lx/2)**2 + (Y - Ly/2)**2) / (2*sigma**2))
+    
+    # Instantiate and process
+    fft_processor = FFT2D()
+    F = fft_processor.forward(u_original)
+    u_reconstructed = fft_processor.inverse(F)
+    
+    # Verification
+    print("Reconstruction accurate?", np.allclose(u_original, u_reconstructed, atol=1e-10))
+    
+    # Visualization
+    plt.figure(figsize=(18, 5))
+    
+    # Original image
+    plt.subplot(1, 3, 1)
+    cont = plt.contourf(X, Y, u_original, levels=100, cmap='viridis')
+    plt.colorbar(cont)
+    plt.title('Original Image')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    
+    # FFT magnitude spectrum
+    plt.subplot(1, 3, 2)
+    F_magnitude = np.log(np.abs(F) + 1e-10)
+    cont_fft = plt.contourf(X, Y, F_magnitude, levels=100, cmap='viridis')
+    plt.colorbar(cont_fft)
+    plt.title('FFT Magnitude (log scale)')
+    plt.xlabel('kx')
+    plt.ylabel('ky')
+    
+    # Reconstructed image
+    plt.subplot(1, 3, 3)
+    cont_rec = plt.contourf(X, Y, u_reconstructed, levels=100, cmap='viridis')
+    plt.colorbar(cont_rec)
+    plt.title('Reconstructed Image')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    
+    # Save figure
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    images_dir = os.path.join(current_dir, 'images')
+    os.makedirs(images_dir, exist_ok=True)
+    plt.savefig(os.path.join(images_dir, 'standard_fourier.png'), dpi=300, bbox_inches='tight')
+    plt.close()

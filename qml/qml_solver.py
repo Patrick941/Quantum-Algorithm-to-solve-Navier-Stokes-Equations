@@ -143,11 +143,10 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=0.005, weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=20, factor=0.5)
 
 # Training loop with early stopping
-epochs = 1000
+epochs = 60
 best_loss = float('inf')
 patience = 50
 no_improve = 0
-good_enough = 1
 
 for epoch in range(epochs):
     optimizer.zero_grad()
@@ -166,10 +165,6 @@ for epoch in range(epochs):
         no_improve = 0
     else:
         no_improve += 1
-        
-    if loss < good_enough:
-        print(f"Converged at epoch {epoch}")
-        break
         
     if no_improve >= patience:
         print(f"Early stopping at epoch {epoch}")
