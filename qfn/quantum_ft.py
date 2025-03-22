@@ -1,60 +1,74 @@
 import warnings
-warnings.filterwarnings('ignore')
-import matplotlib.pyplot as plt
-from qiskit.quantum_info import SparsePauliOp
-
-# Create Hamiltonians
-hamiltonian = SparsePauliOp(['ZZ', 'IX', 'XI'], coeffs=[-0.2, -1, -1])
-magnetization = SparsePauliOp(['IZ', 'ZI'], coeffs=[1, 1])
-
-# Create and draw ansatz circuit
-from qiskit.circuit.library import EfficientSU2
-ansatz = EfficientSU2(hamiltonian.num_qubits, reps=1)
-circuit = ansatz.decompose()
-circuit.draw('mpl', style='iqp')
-plt.title('Ansatz Circuit Diagram')
-plt.savefig("images/ansatz.png", dpi=300, bbox_inches='tight')
-
-# Initialize parameters
 import numpy as np
-init_param_values = {}
-for i in range(len(ansatz.parameters)):
-    init_param_values[ansatz.parameters[i]] = np.pi / 2
-
-# Set up imaginary time evolution
+import matplotlib.pyplot as plt
+from qiskit.quantum_info import SparsePauliOp, Statevector
+from qiskit.circuit.library import EfficientSU2
 from qiskit.algorithms.time_evolvers.variational import ImaginaryMcLachlanPrinciple
-var_principle = ImaginaryMcLachlanPrinciple()
-
-from qiskit.algorithms import TimeEvolutionProblem
-time = 5.0
-aux_ops = [hamiltonian]
-evolution_problem = TimeEvolutionProblem(hamiltonian, time, aux_operators=aux_ops)
-
-# Run VarQITE
-from qiskit.algorithms import VarQITE
+from qiskit.algorithms import VarQITE, TimeEvolutionProblem, SciPyImaginaryEvolver
 from qiskit.primitives import Estimator
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# =============================================
+# 1. Define the Poisson Equation Hamiltonian
+# =============================================
+# Discretize ∇²u = -f on a 4-point grid (2 qubits) with f(x) = 1
+# Laplacian matrix (periodic BCs for simplicity):
+# H = -∇² + f(x)
+# Encoded as Pauli terms (simplified for demonstration)
+hamiltonian = SparsePauliOp(
+    ["II", "IZ", "ZI", "ZZ", "XX"], 
+    coeffs=[2.25, -0.25, -0.25, -0.25, -0.25]
+)
+# Note: This Hamiltonian is derived from a 4-point discretized Laplacian + source term f=1.
+
+# =============================================
+# 2. Prepare the Ansatz Circuit
+# =============================================
+num_qubits = 2
+ansatz = EfficientSU2(num_qubits, reps=1)
+circuit = ansatz.decompose()
+circuit.draw("mpl", style="iqp")
+plt.title("Ansatz for Poisson Equation")
+plt.savefig("images/ansatz_poisson.png", dpi=300, bbox_inches="tight")
+
+# =============================================
+# 3. Initialize Parameters
+# =============================================
+init_param_values = {param: np.pi / 2 for param in ansatz.parameters}
+
+# =============================================
+# 4. Set Up VarQITE
+# =============================================
+var_principle = ImaginaryMcLachlanPrinciple()
+time = 5.0
+evolution_problem = TimeEvolutionProblem(hamiltonian, time, aux_operators=[hamiltonian])
+
 var_qite = VarQITE(ansatz, init_param_values, var_principle, Estimator())
 evolution_result = var_qite.evolve(evolution_problem)
 
-# Prepare exact evolution comparison
-from qiskit.quantum_info import Statevector
-from qiskit.algorithms import SciPyImaginaryEvolver
+# =============================================
+# 5. Exact Classical Solution
+# =============================================
+# Solve Hψ = Eψ classically
 init_state = Statevector(ansatz.assign_parameters(init_param_values))
-evolution_problem = TimeEvolutionProblem(hamiltonian, time, initial_state=init_state, aux_operators=aux_ops)
 exact_evol = SciPyImaginaryEvolver(num_timesteps=501)
-sol = exact_evol.evolve(evolution_problem)
+exact_solution = exact_evol.evolve(TimeEvolutionProblem(hamiltonian, time, initial_state=init_state, aux_operators=[hamiltonian]))
 
-# Plot energy comparison
+# =============================================
+# 6. Plot Results
+# =============================================
 plt.figure(figsize=(10, 6))
-h_exp_val = np.array([ele[0][0] for ele in evolution_result.observables])
-exact_h_exp_val = sol.observables[0][0].real
 times = evolution_result.times
+h_exp_val = np.array([ele[0][0] for ele in evolution_result.observables])
+exact_h_exp_val = exact_solution.observables[0][0].real
 
 plt.plot(times, h_exp_val, label="VarQITE")
-plt.plot(times, exact_h_exp_val, label="Exact Solution", linestyle='--')
-plt.xlabel("Imaginary Time (τ)", fontsize=12)
-plt.ylabel("Energy", fontsize=12)
-plt.title("Energy Evolution Comparison", fontsize=14)
+plt.plot(times, exact_h_exp_val, "--", label="Exact")
+plt.xlabel("Imaginary Time (τ)")
+plt.ylabel("Energy (Hamiltonian Expectation)")
+plt.title("Poisson Equation: VarQITE vs Exact Imaginary Time Evolution")
 plt.legend()
 plt.grid(True)
-plt.savefig("images/VARQITE.png", dpi=300, bbox_inches='tight')
+plt.savefig("images/poisson_varqite.png", dpi=300, bbox_inches="tight")
+
