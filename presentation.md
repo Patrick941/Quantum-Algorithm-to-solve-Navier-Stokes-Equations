@@ -1,76 +1,32 @@
-% Debugging Problems
+% Quantum Solution to Navier-Stokes Flow Simulation
 % Author: Patrick Farmer
 
-# Quantum Solution to Navier-Stokes Flow Simulation
+# Introduction
 
-- “The Navier-Stokes equations are notoriously difficult to solve on classical computers at large Reynolds numbers”
-
----
-
-# Ideal Solution
-
-- What LLMs are good at
-- What LLMs are bad at
-- Interacting with LLM in code
+- Flow simulation is a critical component in many fields
+- The Navier-Stokes equations describe the motion of fluid substances
+- An equation derived from the Navier-Stokes equations is the Poisson equation
 
 ---
 
-# Debugging Importance
-
-- Percentage of time debugging
-- Cost of debugging late vs early in production
-- Increased importance of debugging with LLMs
+# Problem Statement
 
 ---
 
-# Skills for Debugging
-
-- Understanding the language + problem
-- Using debugging tools
-- Previous experience with bugs
+# Background
 
 ---
 
-# Addressing Debugging
-
-- Greater exposure to python from program + practice understanding problems
-- Future front end should include debugging tools
-- More exposure to bugs particularly in LLMs
+# Variational Quantum Imaginary Time Evolution
 
 ---
 
-# Code Architecture
-
-- Diagram of code blocks (More granular than just classes)
+# Quantum Machine Learning
 
 ---
 
-# Bug Insertion
-
-- How bugs are inserted
-- Common issues with insertion and workarounds implemented
-
----
-
-# Self Checking and Improvement
-
-- How self checking is implemented
-- How the problematic responses are improved
-
----
-
-# Performance across models
-
-- Comparison of performance across models with graph
-- Discussion of reasoning vs normal models
+# Results
 
 ---
 
 # Conclusion
-
-- Summary of project
-- Future work
-- Questions
-- Thank you
-
-`
